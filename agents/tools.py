@@ -80,8 +80,13 @@ class CandidateStore:
             self.sources[e].add(d)
 
     def add_from_text(self, text, domain=""):
-        for e in EMAIL_RE.findall(_html_to_text(text)):
-            self.add(e, domain)
+        # 두 방식으로 추출해 합친다:
+        #  1) 태그 제거(공백 없이): 로컬파트 중간 태그로 잘린 이메일 복구
+        #  2) 태그를 공백으로: 인접 태그 사이 서로 다른 이메일이 붙어 유실되는 것 방지
+        spaced = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text or ""))
+        for norm in (_html_to_text(text), spaced):
+            for e in EMAIL_RE.findall(norm):
+                self.add(e, domain)
 
     def all(self):
         return list(self.sources)

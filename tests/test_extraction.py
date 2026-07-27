@@ -25,3 +25,10 @@ def test_real_space_is_not_merged():
     s.add_from_text("luckyfresh. official@gmail.com", "x.com")
     assert "luckyfresh.official@gmail.com" not in s.all()
     assert "official@gmail.com" in s.all()
+
+
+def test_adjacent_emails_in_separate_tags_both_kept():
+    s = CandidateStore()
+    s.add_from_text("<td>a@x.com</td><td>b@y.com</td>", "z.com")
+    assert "a@x.com" in s.all()
+    assert "b@y.com" in s.all()
