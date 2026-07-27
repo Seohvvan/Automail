@@ -228,6 +228,29 @@ def _fetch_via_jina(url, timeout=40):
         return ""
 
 
+def _scan_js_bundles(domain, home_html, max_files=5, max_bytes=2_000_000):
+    """홈 HTML 의 <script src> 중 '동일 도메인 .js' 본문을 이어붙여 반환.
+
+    SPA 번들 안에 이메일이 문자열로 박힌 경우(정적/렌더링으로도 안 잡히는 사이트)를
+    대비한 최후 폴백. 파일 개수·크기 상한으로 비용을 통제한다.
+    """
+    srcs = re.findall(r'<script[^>]+src=["\x27]([^"\x27]+\.js)["\x27]',
+                      home_html or "", re.I)
+    texts, count = [], 0
+    for src in srcs:
+        if count >= max_files:
+            break
+        url = src if src.startswith("http") else f"https://{domain}/{src.lstrip('/')}"
+        if normalize_domain(url) != domain:
+            continue
+        try:
+            texts.append(_fetch_page(url)[:max_bytes])
+            count += 1
+        except Exception:  # noqa: BLE001 - 개별 번들 실패는 건너뜀
+            continue
+    return "\n".join(texts)
+
+
 def _extract_cands(text):
     """이메일 후보 리스트(에셋/플레이스홀더 제외, 순서 보존).
 
@@ -291,7 +314,8 @@ def make_search_tools(store):
     def open_website(url_or_domain: str) -> str:
         """웹페이지(도메인 또는 URL)를 직접 열어 본문과 이메일 후보를 가져온다.
 
-        정적 조회로 이메일 후보가 없으면 Jina Reader(JS 렌더링)로 재조회한다.
+        정적 조회로 이메일 후보가 없으면 Jina Reader(JS 렌더링)로 재조회하고,
+        그래도 없으면 홈의 동일 도메인 .js 번들까지 스캔한다(최후 폴백).
         홈과 문의성 하위 페이지까지 함께 조회한다.
         """
         domain = normalize_domain(url_or_domain)
@@ -312,6 +336,13 @@ def make_search_tools(store):
                 jc = _extract_cands(jina)
                 if jc:
                     text, cands, used = jina, jc, "jina"
+        if not cands and text:
+            js = _scan_js_bundles(domain, text)
+            if js:
+                store.add_from_text(js, domain)
+                bc = _extract_cands(js)
+                if bc:
+                    cands, used = bc, "bundle"
         if not text:
             return f"{domain} 접속 실패"
         plain = _html_to_text(text)

@@ -32,3 +32,29 @@ def test_static_empty_falls_back_to_jina(monkeypatch):
 
 def test_extract_cands_filters_placeholder():
     assert tools._extract_cands("a example@company.com b real@naver.com") == ["real@naver.com"]
+
+
+def test_scan_js_bundles_same_domain_only(monkeypatch):
+    home = ('<script src="/assets/app.js"></script>'
+            '<script src="https://cdn.other.com/vendor.js"></script>')
+
+    def fake_fetch(url, timeout=8, headers=None):
+        if url.endswith("/assets/app.js"):
+            return "footer email: farmtc365@naver.com"
+        raise AssertionError(f"외부 도메인 fetch 금지: {url}")
+
+    monkeypatch.setattr(tools, "_fetch_page", fake_fetch)
+    js = tools._scan_js_bundles("farmtc365.com", home)
+    assert "farmtc365@naver.com" in js
+
+
+def test_bundle_used_only_when_static_and_jina_empty(monkeypatch):
+    monkeypatch.setattr(tools, "_fetch_site_text",
+                        lambda d: '<script src="/assets/app.js"></script>')
+    monkeypatch.setattr(tools, "_fetch_via_jina", lambda url, timeout=40: "")
+    monkeypatch.setattr(tools, "_scan_js_bundles",
+                        lambda domain, home_html, **kw: "메일 luckyfresh.official@gmail.com")
+    store = tools.CandidateStore()
+    open_website = _make_open_website(store)
+    open_website.invoke({"url_or_domain": "luckyfresh.co.kr"})
+    assert "luckyfresh.official@gmail.com" in store.all()
