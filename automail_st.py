@@ -910,7 +910,7 @@ with tab_auto:
             AUTO["event"].set()
             st.toast("승인 전송됨")
         if a2.button("발송 건너뛰기", key=f"ap_skip_{seq}"):
-            AUTO["resume"] = {"approved": []}
+            AUTO["resume"] = {"approved": [], "stop": True}
             AUTO["event"].set()
             st.toast("발송을 건너뜁니다")
 

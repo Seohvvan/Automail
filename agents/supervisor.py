@@ -267,7 +267,9 @@ def build_supervisor_graph(creds, llm, on_event=print):
             except Exception as e:  # noqa: BLE001
                 c["sent"] = False
                 on_event(f"[발송] {c['name']} 실패: {e}")
-        return Command(goto="supervisor", update={"companies": companies})
+        stop = bool(decision.get("stop"))
+        return Command(goto="supervisor",
+                       update={"companies": companies, "_stop": stop})
 
     graph = StateGraph(WorkflowState)
     graph.add_node("supervisor", supervisor_node)

@@ -44,3 +44,4 @@ class WorkflowState(TypedDict, total=False):
     last_action: str       # 직전 supervisor 액션 (같은 액션 반복 감지)
     _targets: list[int]    # supervisor 가 이번 턴에 지정한 업체 인덱스
     _instruction: str      # supervisor 가 서브에이전트에 내린 추가 지시
+    _stop: bool            # 사람이 '발송 건너뛰기'로 즉시 종료 요청
