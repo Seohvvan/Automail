@@ -806,22 +806,14 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 Create `tests/test_approve_stop.py`:
 ```python
-"""approve_send_node 가 interrupt 의 stop 을 상태 _stop 으로 넘기는지 검증.
+"""A2 상태 배선 검증: WorkflowState 에 _stop 필드가 존재하는지 확인.
 
-interrupt() 를 monkeypatch 로 대체해 노드 함수를 단독 호출한다.
+stop→finish 동작 자체는 Task 6 의 resolve_next_action 테스트가 커버한다.
 """
-import agents.supervisor as sup
-from langgraph.graph import END
-
-
-def _build_and_get_nodes(resume_value):
-    # interrupt 를 고정값 반환으로 대체
-    sup.interrupt = lambda payload: resume_value  # type: ignore
-    return sup.build_supervisor_graph(creds=None, llm=None, on_event=lambda *_: None)
+from agents.state import WorkflowState
 
 
 def test_state_has_stop_field():
-    from agents.state import WorkflowState
     assert "_stop" in WorkflowState.__annotations__
 ```
 
