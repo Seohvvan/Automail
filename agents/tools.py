@@ -231,21 +231,24 @@ def _fetch_via_jina(url, timeout=40):
 def _scan_js_bundles(domain, home_html, max_files=5, max_bytes=2_000_000):
     """홈 HTML 의 <script src> 중 '동일 도메인 .js' 본문을 이어붙여 반환.
 
-    SPA 번들 안에 이메일이 문자열로 박힌 경우(정적/렌더링으로도 안 잡히는 사이트)를
-    대비한 최후 폴백. 파일 개수·크기 상한으로 비용을 통제한다.
+    SPA 번들 안에 이메일이 문자열로 박힌 경우를 대비한 최후 폴백.
+    파일 개수·크기 상한으로 비용을 통제한다(성공/실패 무관하게 시도 횟수를 센다).
     """
-    srcs = re.findall(r'<script[^>]+src=["\x27]([^"\x27]+\.js)["\x27]',
-                      home_html or "", re.I)
+    srcs = re.findall(
+        r'<script[^>]+src=["\x27]([^"\x27]+\.js(?:\?[^"\x27]*)?)["\x27]',
+        home_html or "", re.I)
     texts, count = [], 0
     for src in srcs:
         if count >= max_files:
             break
+        if src.startswith("//"):
+            src = "https:" + src
         url = src if src.startswith("http") else f"https://{domain}/{src.lstrip('/')}"
         if normalize_domain(url) != domain:
             continue
+        count += 1                      # 동일 도메인 대상은 성공/실패 무관하게 계수
         try:
             texts.append(_fetch_page(url)[:max_bytes])
-            count += 1
         except Exception:  # noqa: BLE001 - 개별 번들 실패는 건너뜀
             continue
     return "\n".join(texts)
