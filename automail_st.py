@@ -53,6 +53,7 @@ from agents.google_clients import (SCOPES, authenticate,  # noqa: E402
                                    write_column)
 from agents.graph import build_reply_graph  # noqa: E402
 from agents.reply_agent import classify_reply  # noqa: E402
+from agents.sheet_sync import merge_email_column  # noqa: E402
 from agents.supervisor import build_supervisor_graph  # noqa: E402
 from google.auth.transport.requests import Request  # noqa: E402
 from google_auth_oauthlib.flow import Flow  # noqa: E402
@@ -533,12 +534,21 @@ def _auto_log(auto, msg):
 
 
 def _persist_auto_rows(auto, c, wcfg, companies):
-    """supervisor 결과를 전체 행에 반영하고 시트(이메일/제목/본문 열)에 저장."""
+    """supervisor 결과를 전체 행에 반영하고 시트(이메일/제목/본문 열)에 저장.
+
+    이메일 열은 메모리가 비어 있으면 시트의 기존 값을 보존한다
+    (승인 대기 중 수동 입력·재검색 실패로 값이 지워지는 것 방지).
+    """
     rows = auto["rows"]
     for local, comp in zip(auto["indices"], companies):
         rows[local].update(comp)
+    mem_emails = [r.get("email", "") for r in rows]
+    try:
+        sheet_emails = read_column(c, wcfg["spreadsheet_id"], wcfg["email_range"])
+    except Exception:  # noqa: BLE001 - 읽기 실패 시 메모리 값만 사용
+        sheet_emails = []
     write_column(c, wcfg["spreadsheet_id"], wcfg["email_range"],
-                 [r.get("email", "") for r in rows])
+                 merge_email_column(mem_emails, sheet_emails))
     write_column(c, wcfg["spreadsheet_id"], subject_range(wcfg),
                  [r.get("subject", "") for r in rows])
     write_column(c, wcfg["spreadsheet_id"], body_range(wcfg),
