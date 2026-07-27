@@ -10,6 +10,7 @@ grounding(환각 방지)은 도구 계층에서 결정적으로 보장한다:
 코드는 (1) 후보 집합과 정확 일치하는지, (2) 공식 도메인에서 실제로 목격됐는지를
 검사해 등급(HIGH/REVIEW/NONE)을 결정한다 — LLM 의 주장만으로 검증 O 를 주지 않는다.
 """
+import os
 import re
 import ssl
 import urllib.error
@@ -149,9 +150,12 @@ class CandidateStore:
 
 # ---------- 저수준 조회 (도구 내부에서 사용) ----------
 
-def _fetch_page(url, timeout=8):
+def _fetch_page(url, timeout=8, headers=None):
     """페이지 HTML 을 직접 받는다 (macOS 인증서/한국 인코딩 폴백 포함)."""
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    h = {"User-Agent": "Mozilla/5.0"}
+    if headers:
+        h.update(headers)
+    req = urllib.request.Request(url, headers=h)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = r.read()
@@ -211,6 +215,33 @@ def _results_list(raw):
     return []
 
 
+def _fetch_via_jina(url, timeout=40):
+    """Jina Reader(r.jina.ai)로 JS 렌더링된 본문 텍스트를 받는다. 실패 시 ""."""
+    headers = {}
+    key = os.getenv("JINA_API_KEY", "")
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    try:
+        return _fetch_page(f"https://r.jina.ai/{url}", timeout=timeout,
+                           headers=headers or None)
+    except Exception:  # noqa: BLE001 - 렌더링 실패는 다음 단계로
+        return ""
+
+
+def _extract_cands(text):
+    """이메일 후보 리스트(에셋/플레이스홀더 제외, 순서 보존).
+
+    Task 1 의 _emails_from_text(이중 패스 + 잘림 보정)를 재사용해 store 와
+    동일한 추출 규칙을 쓴다(표시용 후보 목록과 grounding store 의 일관성).
+    """
+    out = []
+    for e in _emails_from_text(text):
+        if e.endswith(_ASSET_EXT) or _is_placeholder(e):
+            continue
+        out.append(e)
+    return out
+
+
 # ---------- 에이전트 도구 팩토리 ----------
 
 def make_search_tools(store):
@@ -260,8 +291,8 @@ def make_search_tools(store):
     def open_website(url_or_domain: str) -> str:
         """웹페이지(도메인 또는 URL)를 직접 열어 본문과 이메일 후보를 가져온다.
 
-        검색 인덱스에 없는 페이지(소규모 쇼핑몰 푸터·문의 페이지 등)에서
-        이메일을 찾을 때 사용한다. 홈과 문의성 하위 페이지까지 함께 조회한다.
+        정적 조회로 이메일 후보가 없으면 Jina Reader(JS 렌더링)로 재조회한다.
+        홈과 문의성 하위 페이지까지 함께 조회한다.
         """
         domain = normalize_domain(url_or_domain)
         if not domain:
@@ -270,23 +301,27 @@ def make_search_tools(store):
             text = _fetch_site_text(domain)
         except Exception as e:  # noqa: BLE001
             return f"접속 오류({type(e).__name__}): {e}"
+        used = "static"
+        if text:
+            store.add_from_text(text, domain)
+        cands = _extract_cands(text)
+        if not cands:
+            jina = _fetch_via_jina(f"https://{domain}")
+            if jina:
+                store.add_from_text(jina, domain)
+                jc = _extract_cands(jina)
+                if jc:
+                    text, cands, used = jina, jc, "jina"
         if not text:
             return f"{domain} 접속 실패"
-        store.add_from_text(text, domain)
-        plain = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))
-        cands = []
-        for e in EMAIL_RE.findall(text):
-            e = e.lower().rstrip(".")
-            if not e.endswith(_ASSET_EXT) and e not in cands:
-                cands.append(e)
+        plain = _html_to_text(text)
         low = plain.lower()
         windows = []
         for e in cands[:10]:
             i = low.find(e)
             if i >= 0:
-                # 이메일은 보통 푸터에 있어 주변 ±200자 문맥을 함께 제공
                 windows.append(plain[max(0, i - 200): i + len(e) + 200])
-        out = [f"[{domain} 페이지 원문 앞부분]\n{plain[:1200]}"]
+        out = [f"[{domain} 페이지 원문 앞부분 · 경로:{used}]\n{plain[:1200]}"]
         if cands:
             out.append("[발견된 이메일 후보] " + ", ".join(cands[:15]))
             out.append("[후보 주변 문맥]\n" + "\n---\n".join(windows))
