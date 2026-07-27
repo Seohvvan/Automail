@@ -1,4 +1,4 @@
-from agents.tools import CandidateStore, _html_to_text
+from agents.tools import CandidateStore, _html_to_text, _emails_from_text
 
 
 def test_html_to_text_removes_tags_without_inserting_space():
@@ -32,3 +32,17 @@ def test_adjacent_emails_in_separate_tags_both_kept():
     s.add_from_text("<td>a@x.com</td><td>b@y.com</td>", "z.com")
     assert "a@x.com" in s.all()
     assert "b@y.com" in s.all()
+
+
+def test_markup_split_does_not_leave_truncated_fragment():
+    s = CandidateStore()
+    s.add_from_text("책임자 luckyfresh<span>.</span>official@gmail.com", "x.com")
+    assert "luckyfresh.official@gmail.com" in s.all()
+    assert "official@gmail.com" not in s.all()   # 잘린 조각은 제거
+
+
+def test_legit_suffix_email_not_dropped():
+    # '.' 경계가 아니면(단순 접미사) 실제 이메일은 보존
+    got = _emails_from_text("sales@acme.co 와 wholesales@acme.co")
+    assert "sales@acme.co" in got
+    assert "wholesales@acme.co" in got
