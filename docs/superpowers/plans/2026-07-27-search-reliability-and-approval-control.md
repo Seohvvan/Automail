@@ -423,11 +423,14 @@ def _fetch_via_jina(url, timeout=40):
 
 
 def _extract_cands(text):
-    """정규화 후 이메일 후보 리스트(에셋/플레이스홀더 제외, 순서 보존)."""
+    """이메일 후보 리스트(에셋/플레이스홀더 제외, 순서 보존).
+
+    Task 1 의 _emails_from_text(이중 패스 + 잘림 보정)를 재사용해 store 와
+    동일한 추출 규칙을 쓴다(표시용 후보 목록과 grounding store 의 일관성).
+    """
     out = []
-    for e in EMAIL_RE.findall(_html_to_text(text)):
-        e = e.lower().rstrip(".")
-        if e.endswith(_ASSET_EXT) or _is_placeholder(e) or e in out:
+    for e in _emails_from_text(text):
+        if e.endswith(_ASSET_EXT) or _is_placeholder(e):
             continue
         out.append(e)
     return out
