@@ -127,6 +127,36 @@ def _fallback(companies):
     return "finish", []
 
 
+def pending_search_targets(companies, max_attempts):
+    """이메일 미발견 + 시도 횟수 잔여 + 이름 있는 업체 인덱스 (검색 소진 대상)."""
+    return [i for i, c in enumerate(companies)
+            if c.get("name") and not c.get("email")
+            and c.get("search_attempts", 0) < max_attempts]
+
+
+def resolve_next_action(decision, companies, stop, max_attempts):
+    """LLM 결정 → 최종 (action, valid_targets). 결정적 게이트 포함(순수 함수).
+
+    - stop(사람이 '발송 건너뛰기') 이면 항상 finish.
+    - LLM 대상이 무효면 결정적 폴백.
+    - 미발견+검색 잔여 업체가 있으면 approve_send/finish 를 search 로 오버라이드
+      (승인·종료 전에 검색을 소진).
+    """
+    if stop:
+        return "finish", []
+    action = getattr(decision, "action", "") if decision else ""
+    targets = getattr(decision, "targets", []) if decision else []
+    valid = _valid_targets(action, targets, companies) if action else []
+    if action != "finish" and not valid:
+        action, valid = _fallback(companies)
+    if action != "finish" and not valid:
+        action = "finish"
+    pending = pending_search_targets(companies, max_attempts)
+    if action in ("approve_send", "finish") and pending:
+        return "search", pending
+    return action, valid
+
+
 def build_supervisor_graph(creds, llm, on_event=print):
     """supervisor 멀티 에이전트 그래프를 컴파일해 반환 (checkpointer 포함)."""
 
@@ -144,18 +174,11 @@ def build_supervisor_graph(creds, llm, on_event=print):
         )
         try:
             d = llm.with_structured_output(SupervisorDecision).invoke(prompt)
-            action, targets, instruction = d.action, d.targets, d.instruction
-            reason = d.reason
+            instruction, reason = d.instruction, d.reason
         except Exception as e:  # noqa: BLE001 - LLM 실패 시 결정적 폴백
-            action, targets, instruction, reason = "", [], "", f"LLM 오류 폴백: {e}"
-        valid = _valid_targets(action, targets, companies) if action else []
-        if action != "finish" and not valid:
-            fb_action, fb_targets = _fallback(companies)
-            if action:
-                on_event(f"[관리자] '{action}' 대상 없음 → 폴백: {fb_action}")
-            action, valid = fb_action, fb_targets
-        if action != "finish" and not valid:
-            action = "finish"
+            d, instruction, reason = None, "", f"LLM 오류 폴백: {e}"
+        action, valid = resolve_next_action(
+            d, companies, state.get("_stop", False), MAX_SEARCH_ATTEMPTS)
         on_event(f"[관리자] 결정: {action}"
                  + (f" (대상 {len(valid)}곳)" if valid else "")
                  + (f" — {reason}" if reason else ""))
