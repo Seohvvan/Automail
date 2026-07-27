@@ -35,25 +35,36 @@ def _html_to_text(html):
 def _emails_from_text(text):
     """HTML/텍스트에서 이메일 후보를 뽑는다.
 
-    - 태그 제거(공백 없이): 로컬파트 중간 태그로 잘린 이메일 복구
-    - 태그를 공백으로: 인접 태그 사이 서로 다른 이메일이 붙어 유실되는 것 방지
-    - '.' 경계 접미사 조각(태그로 잘린 흔적, 예: 'official@...' ⊂ 'luckyfresh.official@...') 제거
-    정규화·중복제거된 이메일 리스트 반환(에셋/플레이스홀더 필터는 add 단계).
+    두 정규화를 함께 사용한다:
+      - 태그 제거(공백 없이): 로컬파트 중간 태그로 잘린 이메일 복구
+        (luckyfresh<span>.</span>official@... → luckyfresh.official@...)
+      - 태그를 공백으로: 인접 태그 사이 서로 다른 이메일이 붙어 유실되는 것 방지
+    그리고 '태그로 잘린 조각'만 제거한다: 조각은 공백 패스에만 있고(전체 이메일은
+    태그제거 패스에서 복원됨) 태그제거 후보의 '.' 경계 접미사인 경우다. 평문에서
+    우연히 접미사가 겹치는 '서로 다른 실제 이메일'(info@a.com vs kim.info@a.com)은
+    양쪽 패스에 모두 나타나므로 지우지 않는다.
     """
-    spaced = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text or ""))
-    cands = []
-    for norm in (_html_to_text(text), spaced):
-        for e in EMAIL_RE.findall(norm):
+    def extract(s):
+        seen = []
+        for e in EMAIL_RE.findall(s):
             e = e.lower().rstrip(".")
-            if e and e not in cands:
-                cands.append(e)
-    # '.' 경계 접미사 제거: 잘린 조각일 가능성이 높음
-    # 예: 'official@gmail.com'은 'luckyfresh.official@gmail.com'의 접미사면서
-    # 그 앞이 '.'이므로 제거 (태그로 인해 떨어진 흔적)
-    # 참고: 'a@x.comb' 같은 글루된 쓰레기(접미사 X, 접두사)는 유지됨
-    return [e for e in cands
-            if not any(y != e and y.endswith(e) and y[:-len(e)].endswith(".")
-                       for y in cands)]
+            if e and e not in seen:
+                seen.append(e)
+        return seen
+
+    empty = extract(_html_to_text(text))
+    spaced = extract(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text or "")))
+    empty_set = set(empty)
+    out = []
+    for e in empty + spaced:
+        if e in out:
+            continue
+        if e not in empty_set and any(
+                y != e and y.endswith(e) and y[:-len(e)].endswith(".")
+                for y in empty):
+            continue  # 공백 패스에만 있는 '.' 경계 접미사 = 태그로 잘린 조각
+        out.append(e)
+    return out
 
 
 # 이미지 파일명 등이 이메일 패턴에 오인 매칭되는 것 방지 (예: icon@2x.png)

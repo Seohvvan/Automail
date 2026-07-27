@@ -46,3 +46,10 @@ def test_legit_suffix_email_not_dropped():
     got = _emails_from_text("sales@acme.co 와 wholesales@acme.co")
     assert "sales@acme.co" in got
     assert "wholesales@acme.co" in got
+
+
+def test_distinct_plaintext_emails_sharing_dot_suffix_both_kept():
+    # HTML 없음: 우연히 '.' 경계 접미사를 공유하는 서로 다른 실제 이메일은 보존
+    got = _emails_from_text("문의: info@a.com, 담당자: kim.info@a.com")
+    assert "info@a.com" in got
+    assert "kim.info@a.com" in got
