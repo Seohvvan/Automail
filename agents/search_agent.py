@@ -29,8 +29,10 @@ class SearchDecision(BaseModel):
     official_domain: str = Field(description="업체 공식 홈페이지 도메인 (예: 'example.com'). "
                                              "포털/SNS/블로그 등 플랫폼 도메인 금지. "
                                              "확인 못 했으면 빈 문자열.")
-    is_target_business: bool = Field(description="찾은 업체가 힌트(업종/키워드)에 맞는 그 "
-                                                 "업체면 true. 이름만 같은 다른 회사면 false.")
+    is_target_business: bool = Field(description="찾은 업체가 힌트(업종/키워드/지역)에 "
+                                                 "맞는 그 업체면 true. 이름만 비슷하거나 "
+                                                 "업종만 비슷한 다른 회사(힌트와 불일치)면 "
+                                                 "false.")
     confidence: float = Field(description="0~1 사이 신뢰도.")
     company_summary: str = Field(description="업체 소개 2~3문장 (작성 에이전트가 참고).")
     reasoning: str = Field(description="판단 근거를 한국어 한두 문장으로.")
@@ -59,6 +61,9 @@ web_search(웹 검색, include_domain 으로 도메인 한정 가능)와 open_we
   소비자용 사이트(.com.au, usa/global 전용 등)의 주소는 답이 아닙니다.
 - 이름만 같은 다른 업종/회사에 주의하세요 (힌트와 대조).
 - 도구 결과에 실제로 등장한 이메일만 답할 수 있습니다. 추측·조합 금지.
+- 임의 합성 금지: 이메일 ID, 유사 상호명, 유사 업종(예: 농산물 유통)이라는 이유만으로
+  서로 다른 업체의 정보를 하나로 묶거나 합치지 마라. 힌트(업종/지역)와 명확히
+  불일치하면 is_target_business=false 로 판단하라.
 - 충분히 확인했으면 도구 호출을 멈추고 조사 결과를 요약하세요.
 - 같은 검색을 반복하지 말고, 각 호출마다 전략을 바꾸세요.
 - 포기하기 전 체크리스트: 통합 웹 검색(전략 3)을 시도하지 않았다면 아직 포기하면
