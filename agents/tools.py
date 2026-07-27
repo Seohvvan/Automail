@@ -69,6 +69,24 @@ def _emails_from_text(text):
 
 # 이미지 파일명 등이 이메일 패턴에 오인 매칭되는 것 방지 (예: icon@2x.png)
 _ASSET_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".css", ".js", ".ico")
+# 개발자가 코드/템플릿에 박아두는 가짜 이메일 (특히 JS 번들 스캔 시 유입)
+_PLACEHOLDER_LOCALPARTS = frozenset({
+    "example", "test", "sample", "samples", "your", "youremail", "yourname",
+    "email", "mail", "user", "username", "name", "admin", "demo",
+    "noreply", "no-reply", "donotreply", "do-not-reply",
+})
+_PLACEHOLDER_DOMAINS = frozenset({
+    "example.com", "example.org", "example.net", "domain.com",
+    "company.com", "email.com", "yourdomain.com", "sample.com", "test.com",
+})
+
+
+def _is_placeholder(email):
+    """플레이스홀더/샘플 이메일이면 True (후보에서 제외)."""
+    local, _, dom = (email or "").lower().partition("@")
+    return local in _PLACEHOLDER_LOCALPARTS or dom in _PLACEHOLDER_DOMAINS
+
+
 # 직접 조회 시 홈에서 추적할 문의성 하위 페이지 링크
 _CONTACT_LINK_RE = re.compile(
     r"contact|about|company|support|guide|agreement|privacy|문의|회사|고객", re.I)
@@ -107,7 +125,7 @@ class CandidateStore:
 
     def add(self, email, domain=""):
         e = (email or "").lower().rstrip(".")
-        if not e or e.endswith(_ASSET_EXT):
+        if not e or e.endswith(_ASSET_EXT) or _is_placeholder(e):
             return
         self.sources.setdefault(e, set())
         d = normalize_domain(domain)
