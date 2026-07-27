@@ -300,12 +300,21 @@ def make_search_tools(store):
                              r.get("raw_content", "") or ""])
             store.add_from_text(text, dom)
             store.add_from_text(url, dom)
+            result_emails = []
             for e in EMAIL_RE.findall(text + " " + url):
                 e = e.lower().rstrip(".")
-                if not e.endswith(_ASSET_EXT) and (e, dom) not in found:
+                if (not e.endswith(_ASSET_EXT) and not _is_placeholder(e)
+                        and (e, dom) not in found):
                     found.append((e, dom))
+                    result_emails.append(e)
             content = (r.get("raw_content") or r.get("content") or "")[:700]
-            lines.append(f"- {r.get('title', '')} ({url})\n  {content}")
+            # Sanitize content to remove placeholder emails
+            for e in EMAIL_RE.findall(content):
+                e_lower = e.lower().rstrip(".")
+                if _is_placeholder(e_lower):
+                    content = content.replace(e, "")
+            if result_emails or not EMAIL_RE.search(text + " " + url):
+                lines.append(f"- {r.get('title', '')} ({url})\n  {content}")
         if found:
             lines.append("\n[이 검색에서 발견된 이메일 후보]")
             lines += [f"- {e}  (출처: {d or '불명'})" for e, d in found[:15]]
