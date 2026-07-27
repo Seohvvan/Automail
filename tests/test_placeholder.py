@@ -22,3 +22,10 @@ def test_store_rejects_placeholder():
     s.add_from_text("문의 example@company.com 또는 farmtc365@naver.com", "farmtc365.com")
     assert "example@company.com" not in s.all()
     assert "farmtc365@naver.com" in s.all()
+
+
+def test_generic_business_localparts_not_flagged():
+    # mail@/admin@/info@/user@ 는 실제 업체가 쓰는 주소일 수 있으므로 차단하지 않는다
+    for e in ("mail@company.co.kr", "admin@realbiz.com",
+              "info@realbiz.com", "user@realbiz.com"):
+        assert not _is_placeholder(e)

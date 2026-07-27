@@ -72,8 +72,7 @@ _ASSET_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".css", ".js", "
 # 개발자가 코드/템플릿에 박아두는 가짜 이메일 (특히 JS 번들 스캔 시 유입)
 _PLACEHOLDER_LOCALPARTS = frozenset({
     "example", "test", "sample", "samples", "your", "youremail", "yourname",
-    "email", "mail", "user", "username", "name", "admin", "demo",
-    "noreply", "no-reply", "donotreply", "do-not-reply",
+    "username", "demo", "noreply", "no-reply", "donotreply", "do-not-reply",
 })
 _PLACEHOLDER_DOMAINS = frozenset({
     "example.com", "example.org", "example.net", "domain.com",
