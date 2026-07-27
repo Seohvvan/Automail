@@ -177,8 +177,12 @@ def build_supervisor_graph(creds, llm, on_event=print):
             instruction, reason = d.instruction, d.reason
         except Exception as e:  # noqa: BLE001 - LLM 실패 시 결정적 폴백
             d, instruction, reason = None, "", f"LLM 오류 폴백: {e}"
+        requested = getattr(d, "action", None) if d else None
         action, valid = resolve_next_action(
             d, companies, state.get("_stop", False), MAX_SEARCH_ATTEMPTS)
+        if requested and action != requested:
+            on_event(f"[관리자] '{requested}' 조정 → '{action}' "
+                     "(결정적 게이트/폴백: 미발견 업체 검색 소진 또는 무효 대상)")
         on_event(f"[관리자] 결정: {action}"
                  + (f" (대상 {len(valid)}곳)" if valid else "")
                  + (f" — {reason}" if reason else ""))
