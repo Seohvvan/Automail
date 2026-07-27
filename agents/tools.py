@@ -21,6 +21,17 @@ from langchain_tavily import TavilySearch
 
 URL_RE = re.compile(r"https?://\S+|www\.\S+")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def _html_to_text(html):
+    """HTML 태그를 '공백 삽입 없이' 제거하고 공백을 정규화한다.
+
+    태그를 공백으로 치환하면 'luckyfresh<span>.</span>official@...' 이
+    끊겨 이메일이 잘리므로, 태그는 빈 문자열로 제거한 뒤 공백만 정규화한다.
+    """
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html or ""))
+
+
 # 이미지 파일명 등이 이메일 패턴에 오인 매칭되는 것 방지 (예: icon@2x.png)
 _ASSET_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".css", ".js", ".ico")
 # 직접 조회 시 홈에서 추적할 문의성 하위 페이지 링크
@@ -69,7 +80,7 @@ class CandidateStore:
             self.sources[e].add(d)
 
     def add_from_text(self, text, domain=""):
-        for e in EMAIL_RE.findall(text or ""):
+        for e in EMAIL_RE.findall(_html_to_text(text)):
             self.add(e, domain)
 
     def all(self):
