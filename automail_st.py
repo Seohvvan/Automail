@@ -811,7 +811,13 @@ with st.expander("설정 / 첨부", expanded=False):
         cfg["attachment_path"] = os.path.abspath(path)
         st.caption(f"첨부: {up.name}")
     elif cfg["attachment_path"]:
-        st.caption(f"첨부: {os.path.basename(cfg['attachment_path'])}")
+        cap_col, btn_col = st.columns([3, 1])
+        cap_col.caption(f"첨부: {os.path.basename(cfg['attachment_path'])}")
+        if btn_col.button("첨부 제거", key="c_pdf_clear"):
+            # 경로만 비운다(파일은 다른 스냅샷이 참조할 수 있어 삭제하지 않음).
+            # '설정 저장'을 눌러야 빈 첨부 상태가 스냅샷에 반영된다.
+            cfg["attachment_path"] = ""
+            st.rerun()
     else:
         st.caption("첨부 없음")
     if st.button("설정 저장", type="primary"):
