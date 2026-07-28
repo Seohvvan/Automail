@@ -885,7 +885,8 @@ with tab_auto:
 
     def render_approval(p):
         seq = AUTO["pending_seq"]
-        t = p.get("test_email") or ""
+        # 실행 시작 시 동결값(p["test_email"]) 대신 현재 토글값을 실시간 반영.
+        t = test_email()
         note = (f"테스트 모드: {t} 로 발송됩니다." if t else "실제 업체 주소로 발송됩니다!")
         st.markdown("#### 발송 승인 대기 " + badge("question", "사람 확인 필요"),
                     unsafe_allow_html=True)
@@ -916,7 +917,8 @@ with tab_auto:
                         "subject": (st.session_state.get(f"as_{seq}_{i}") or "").strip(),
                         "body": (st.session_state.get(f"ab_{seq}_{i}") or "").strip(),
                     })
-            AUTO["resume"] = {"approved": approved}
+            # 승인하는 순간의 라이브 토글값을 실어 보낸다(실행 시작 시 동결값 대신).
+            AUTO["resume"] = {"approved": approved, "test_email": test_email()}
             AUTO["event"].set()
             st.toast("승인 전송됨")
         if a2.button("발송 건너뛰기", key=f"ap_skip_{seq}"):

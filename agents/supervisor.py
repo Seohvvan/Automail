@@ -242,6 +242,9 @@ def build_supervisor_graph(creds, llm, on_event=print):
         # ---- 여기서 그래프가 멈추고 사람의 결정을 기다린다 ----
         decision = interrupt({"type": "approval", "drafts": drafts,
                               "test_email": test_email}) or {}
+        # 승인 시점에 실린 라이브 토글값이 있으면 우선(실행 시작 시 동결값 대신).
+        if "test_email" in decision:
+            test_email = (decision.get("test_email") or "").strip()
         approved = {int(a["i"]): a for a in decision.get("approved", [])}
         for i in targets:
             c = companies[i]
