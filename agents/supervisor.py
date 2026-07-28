@@ -222,7 +222,8 @@ def build_supervisor_graph(creds, llm, on_event=print):
                     name=state.get("writer_name", ""),
                     event=state.get("event_name", ""),
                     phone=state.get("writer_phone", ""),
-                    event_date=state.get("event_date", ""))
+                    event_date=state.get("event_date", ""),
+                    attachment_path=state.get("attachment_path", ""))
                 c["subject"], c["body"] = proposal.subject, proposal.body
                 on_event(f"[작성] {c['name']} 초안 완료")
             except Exception as e:  # noqa: BLE001
