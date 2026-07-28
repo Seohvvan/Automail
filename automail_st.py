@@ -53,6 +53,7 @@ from agents.google_clients import (SCOPES, authenticate,  # noqa: E402
                                    write_column)
 from agents.graph import build_reply_graph  # noqa: E402
 from agents.reply_agent import classify_reply  # noqa: E402
+from agents.sheet_sync import merge_email_column  # noqa: E402
 from agents.supervisor import build_supervisor_graph  # noqa: E402
 from google.auth.transport.requests import Request  # noqa: E402
 from google_auth_oauthlib.flow import Flow  # noqa: E402
@@ -533,12 +534,21 @@ def _auto_log(auto, msg):
 
 
 def _persist_auto_rows(auto, c, wcfg, companies):
-    """supervisor 결과를 전체 행에 반영하고 시트(이메일/제목/본문 열)에 저장."""
+    """supervisor 결과를 전체 행에 반영하고 시트(이메일/제목/본문 열)에 저장.
+
+    이메일 열은 메모리가 비어 있으면 시트의 기존 값을 보존한다
+    (승인 대기 중 수동 입력·재검색 실패로 값이 지워지는 것 방지).
+    """
     rows = auto["rows"]
     for local, comp in zip(auto["indices"], companies):
         rows[local].update(comp)
+    mem_emails = [r.get("email", "") for r in rows]
+    try:
+        sheet_emails = read_column(c, wcfg["spreadsheet_id"], wcfg["email_range"])
+    except Exception:  # noqa: BLE001 - 읽기 실패 시 메모리 값만 사용
+        sheet_emails = []
     write_column(c, wcfg["spreadsheet_id"], wcfg["email_range"],
-                 [r.get("email", "") for r in rows])
+                 merge_email_column(mem_emails, sheet_emails))
     write_column(c, wcfg["spreadsheet_id"], subject_range(wcfg),
                  [r.get("subject", "") for r in rows])
     write_column(c, wcfg["spreadsheet_id"], body_range(wcfg),
@@ -801,7 +811,13 @@ with st.expander("설정 / 첨부", expanded=False):
         cfg["attachment_path"] = os.path.abspath(path)
         st.caption(f"첨부: {up.name}")
     elif cfg["attachment_path"]:
-        st.caption(f"첨부: {os.path.basename(cfg['attachment_path'])}")
+        cap_col, btn_col = st.columns([3, 1])
+        cap_col.caption(f"첨부: {os.path.basename(cfg['attachment_path'])}")
+        if btn_col.button("첨부 제거", key="c_pdf_clear"):
+            # 경로만 비운다(파일은 다른 스냅샷이 참조할 수 있어 삭제하지 않음).
+            # '설정 저장'을 눌러야 빈 첨부 상태가 스냅샷에 반영된다.
+            cfg["attachment_path"] = ""
+            st.rerun()
     else:
         st.caption("첨부 없음")
     if st.button("설정 저장", type="primary"):
@@ -875,7 +891,8 @@ with tab_auto:
 
     def render_approval(p):
         seq = AUTO["pending_seq"]
-        t = p.get("test_email") or ""
+        # 실행 시작 시 동결값(p["test_email"]) 대신 현재 토글값을 실시간 반영.
+        t = test_email()
         note = (f"테스트 모드: {t} 로 발송됩니다." if t else "실제 업체 주소로 발송됩니다!")
         st.markdown("#### 발송 승인 대기 " + badge("question", "사람 확인 필요"),
                     unsafe_allow_html=True)
@@ -906,11 +923,12 @@ with tab_auto:
                         "subject": (st.session_state.get(f"as_{seq}_{i}") or "").strip(),
                         "body": (st.session_state.get(f"ab_{seq}_{i}") or "").strip(),
                     })
-            AUTO["resume"] = {"approved": approved}
+            # 승인하는 순간의 라이브 토글값을 실어 보낸다(실행 시작 시 동결값 대신).
+            AUTO["resume"] = {"approved": approved, "test_email": test_email()}
             AUTO["event"].set()
             st.toast("승인 전송됨")
         if a2.button("발송 건너뛰기", key=f"ap_skip_{seq}"):
-            AUTO["resume"] = {"approved": []}
+            AUTO["resume"] = {"approved": [], "stop": True}
             AUTO["event"].set()
             st.toast("발송을 건너뜁니다")
 

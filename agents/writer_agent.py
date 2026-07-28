@@ -43,7 +43,8 @@ def _format_kdate(iso: str) -> str:
 
 def run_writer_agent(company: dict, sponsor_items: str, sender_name: str, llm,
                      campus: str = "", name: str = "", event: str = "",
-                     phone: str = "", event_date: str = "") -> Proposal:
+                     phone: str = "", event_date: str = "",
+                     attachment_path: str = "") -> Proposal:
     """업체 한 건에 대한 맞춤 제안서 생성 (제목 고정 + 담당자 소개 + 문장별 줄바꿈)."""
     who = name or sender_name or "성균관대학교 총학생회 대외협력국"
     campus = campus or "자연과학캠퍼스"
@@ -80,11 +81,14 @@ def run_writer_agent(company: dict, sponsor_items: str, sender_name: str, llm,
     # 제안 사항 전체(행사 일자·제안 내용·홍보 효과)를 굵게: 각 줄을 ** ** 로 감쌈
     bold_block = "\n".join(f"**{ln.replace('**', '').strip()}**"
                            for ln in lines if ln.strip())
+    # 제안서 PDF 를 첨부한 경우에만 '첨부된 제안서 확인' 문구를 넣는다.
+    attach_line = ("더 자세한 내용은 첨부된 제안서를 확인해 주시면 감사하겠습니다.\n"
+                   if (attachment_path or "").strip() else "")
     block = (
         "제안 사항은 다음과 같습니다.\n\n"
         f"{bold_block}\n\n"
-        "더 자세한 내용은 첨부된 제안서를 확인해 주시면 감사하겠습니다.\n"
-        "귀사의 무궁한 번영을 기원하며, 긍정적인 검토와 함께해 주시길 기다리겠습니다.\n"
+        f"{attach_line}"
+        "귀사의 무궁한 번영을 기원하며, 긍정적인 검토 부탁드리겠습니다.\n"
         "감사합니다."
     )
     body = intro + "\n\n" + _one_sentence_per_line(draft.intro) + "\n\n" + block + signature
