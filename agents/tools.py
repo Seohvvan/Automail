@@ -33,6 +33,37 @@ def _html_to_text(html):
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html or ""))
 
 
+# Cloudflare 이메일 난독화: 실제 주소가 data-cfemail(또는 email-protection#) 의
+# 16진 문자열로 인코딩되고 JS(email-decode.min.js)로 복원된다. 정적/렌더링 텍스트엔
+# '[email protected]' 만 남으므로, 여기서 직접 디코딩해 원래 주소를 회수한다.
+_CFEMAIL_RE = re.compile(
+    r'data-cfemail="([0-9a-fA-F]{4,})"'
+    r'|/cdn-cgi/l/email-protection#([0-9a-fA-F]{4,})')
+
+
+def _decode_cfemail(hexstr):
+    """Cloudflare data-cfemail 16진 문자열을 원래 이메일로 복원한다.
+
+    첫 바이트가 XOR 키이고, 이후 각 바이트를 키와 XOR 하면 원래 문자가 된다.
+    """
+    try:
+        key = int(hexstr[:2], 16)
+        return "".join(chr(int(hexstr[i:i + 2], 16) ^ key)
+                       for i in range(2, len(hexstr), 2))
+    except (ValueError, IndexError):
+        return ""
+
+
+def _cf_emails(html):
+    """HTML 에서 Cloudflare 로 가려진 이메일들을 복원해 리스트로 반환(중복 제거)."""
+    out = []
+    for m in _CFEMAIL_RE.finditer(html or ""):
+        dec = _decode_cfemail(m.group(1) or m.group(2)).lower()
+        if EMAIL_RE.fullmatch(dec) and dec not in out:
+            out.append(dec)
+    return out
+
+
 def _emails_from_text(text):
     """HTML/텍스트에서 이메일 후보를 뽑는다.
 
@@ -65,6 +96,10 @@ def _emails_from_text(text):
                 for y in empty):
             continue  # 공백 패스에만 있는 '.' 경계 접미사 = 태그로 잘린 조각
         out.append(e)
+    # Cloudflare 로 가려진 이메일 복원(텍스트엔 '[email protected]' 만 남으므로 별도 처리)
+    for e in _cf_emails(text):
+        if e not in out:
+            out.append(e)
     return out
 
 
