@@ -2,11 +2,13 @@
 
 구글 시트에 업체 목록(업체명·힌트)만 넣으면, **이메일 자동 탐색 → 업체별 맞춤 제안 메일 작성 → (사람 승인) → 일괄 발송 → 답장 분류·후속 대응**까지 이어지는 협찬/제안 메일 자동화 도구입니다. 성균관대학교 총학생회 S'PEAK 대외협력국의 협찬·부스 입점 제안 업무를 염두에 두고 만들었습니다.
 
+> **바로 사용하기** — 설치 없이 배포된 앱에 접속해 바로 실행할 수 있습니다: **https://automail1398.streamlit.app/**
+
 - **LLM**: Google Gemini (`langchain-google-genai`)
 - **웹 검색**: Tavily (`langchain-tavily`)
 - **오케스트레이션**: LangGraph — supervisor 멀티 에이전트 그래프 + 답장 그래프
 - **연동**: Google Sheets(업체/초안 저장), Gmail(발송·답장 조회·라벨)
-- **UI**: Flask 웹 대시보드 (`automail.py`) — `자동 실행` / `후속 대응` 2개 탭
+- **UI**: Streamlit 웹 대시보드 (`automail_st.py`) — `자동 실행` / `후속 대응` 2개 탭
 
 ---
 
@@ -75,8 +77,9 @@
 
 ```
 automail/
-├── automail.py           # 웹 대시보드 (Flask) — 자동 실행/후속 대응 2탭 + 기본 설정(DEFAULTS)
+├── automail_st.py        # 웹 대시보드 (Streamlit) — 실제 배포·구동되는 메인 앱: 자동 실행/후속 대응 2탭 + 테스트 모드 토글 · 설정/첨부 관리
 ├── agents/
+│   ├── __init__.py       # agents 패키지 초기화 (import 진입점)
 │   ├── supervisor.py     # supervisor 멀티 에이전트 그래프 (Agent — 동적 라우팅 + 발송 승인 interrupt)
 │   ├── search_agent.py   # ① 검색 에이전트 (Agent/ReAct)
 │   ├── writer_agent.py   # ② 작성 에이전트 (Workflow + LLM 도입부)
@@ -113,56 +116,7 @@ automail/
 
 ---
 
-## 5. 설치 & 실행 (uv)
-
-### 5-1. uv 설치
-[uv](https://github.com/astral-sh/uv)는 빠른 파이썬 패키지·가상환경 관리 도구입니다.
-
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-#  또는  brew install uv
-
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-### 5-2. 가상환경 생성 · 활성화 · 라이브러리 설치
-
-```bash
-cd automail
-
-uv venv                        # .venv 가상환경 생성 (필요 시: uv venv --python 3.12)
-source .venv/bin/activate      # 활성화 (Windows: .venv\Scripts\activate)
-
-uv pip install -r requirements.txt   # 라이브러리 설치
-```
-
-### 5-3. 인증 준비
-
-**(1) `.env` 작성** — 프로젝트 루트에 아래 두 키를 넣습니다.
-
-```dotenv
-GEMINI_API_KEY=여기에_Gemini_API_키      # https://aistudio.google.com/app/apikey
-TAVILY_API_KEY=여기에_Tavily_API_키      # https://app.tavily.com
-# GEMINI_MODEL=gemini-3.1-flash-lite     # (선택) 기본값 사용 시 생략
-```
-
-**(2) `credentials.json` 배치** — Google Cloud OAuth 클라이언트 인증서를 프로젝트 루트에 둡니다. Sheets·Gmail 권한을 사용하며, 첫 실행 시 브라우저 로그인 후 `token.json`이 자동 생성됩니다.
-
-> `.env`, `credentials.json`, `token.json`은 개인 인증 정보이므로 **git 등 공개된 곳에 올리지 마세요.**
-
-### 5-4. 실행
-
-```bash
-python automail.py           # → http://localhost:5002
-```
-
-> **배포 버전으로 바로 사용하기** — 로컬 설치 없이 배포된 Streamlit 앱에 접속해 바로 실행해 볼 수도 있습니다: **https://automail1398.streamlit.app/**
-
----
-
-## 6. 사용법
+## 5. 사용법
 
 상단 **설정** 패널에서 스프레드시트 ID·범위(업체명/힌트/이메일)·제안 내용·행사명·행사 일자·담당자·캠퍼스를 입력하고 PDF 를 첨부합니다. 상단 헤더의 **테스트 모드** 토글을 켜면 실제 업체 대신 지정한 테스트 주소로 발송해 미리 확인할 수 있습니다.
 
@@ -179,7 +133,7 @@ python automail.py           # → http://localhost:5002
 
 ---
 
-## 7. 주의사항
+## 6. 주의사항
 
 - **테스트 모드로 본인 메일에 먼저 보내본 뒤** 실제 발송하세요.
 - Gmail 일일 발송 한도: 일반 계정 약 **500통/일**.

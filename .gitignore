@@ -3,3 +3,10 @@ uploads/
 .env
 __pycache__/
 DEPLOY_STREAMLIT.md
+
+# 로컬 전용 (테스트·개발용 — 배포에는 불필요하므로 원격 레포에서는 제외)
+app_not_used.py
+requirements-dev.txt
+docs/
+tests/
+automail.py
