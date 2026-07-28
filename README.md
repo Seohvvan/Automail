@@ -85,6 +85,7 @@ automail/
 │   ├── react.py          # 경량 ReAct 루프 실행기 (도구 선택 루프 + 반복 상한 + trace)
 │   ├── graph.py          # 후속 대응 탭용 답장 그래프 (Workflow: START → reply → END)
 │   ├── google_clients.py # OAuth + Sheets/Gmail + send_email(발송 도구)
+│   ├── sheet_sync.py     # 시트 저장 시 수동 입력 이메일 보존(병합) — 순수 함수
 │   ├── config.py         # .env 로드 + Gemini LLM 팩토리
 │   └── state.py          # 상태 정의(WorkflowState/Company)
 ├── requirements.txt
