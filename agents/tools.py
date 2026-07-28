@@ -37,7 +37,7 @@ def _html_to_text(html):
 # 16진 문자열로 인코딩되고 JS(email-decode.min.js)로 복원된다. 정적/렌더링 텍스트엔
 # '[email protected]' 만 남으므로, 여기서 직접 디코딩해 원래 주소를 회수한다.
 _CFEMAIL_RE = re.compile(
-    r'data-cfemail="([0-9a-fA-F]{4,})"'
+    r'data-cfemail=["\x27]([0-9a-fA-F]{4,})["\x27]'
     r'|/cdn-cgi/l/email-protection#([0-9a-fA-F]{4,})')
 
 
