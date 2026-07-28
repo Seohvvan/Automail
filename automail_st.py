@@ -67,10 +67,10 @@ CFG_KEYS = ["spreadsheet_id", "name_range", "hint_range", "email_range",
 # 기본 설정값 (UI에서 비워두면 이 값이 사용됨). 본인 스프레드시트에 맞게 수정하세요.
 DEFAULTS = {
     "spreadsheet_id": "d/ 뒤에 있는 Spreadsheet ID를 입력하세요",
-    "name_range": "실험용!B5:B13",
-    "hint_range": "실험용!C5:C13",
-    "email_range": "실험용!F5:F13",
-    "sponsor_items": "문행대동제 부스 협찬: 제품 샘플 500개, 부스 배너 노출, 공식 SNS 홍보 1회",
+    "name_range": "시트이름!시작cell:끝cell (예: 실험용!C5:C13)",
+    "hint_range": "시트이름!시작cell:끝cell (예: 실험용!C5:C13)",
+    "email_range": "시트이름!시작cell:끝cell (예: 실험용!F5:F13)",
+    "sponsor_items": "제안 내용: 협찬 가능한 제품 500개, 홍보 효과: 부스 배너 노출, 공식 SNS 홍보 1회",
     "event_name": "2026 대동제",
 }
 CONFIG_DIR = os.path.join(BASE_DIR, "config")   # 설정 스냅샷 저장 폴더
