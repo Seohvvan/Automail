@@ -84,7 +84,7 @@ def run_writer_agent(company: dict, sponsor_items: str, sender_name: str, llm,
         "제안 사항은 다음과 같습니다.\n\n"
         f"{bold_block}\n\n"
         "더 자세한 내용은 첨부된 제안서를 확인해 주시면 감사하겠습니다.\n"
-        "귀사의 무궁한 번영을 기원하며, 긍정적인 검토와 함께해 주시길 기다리겠습니다.\n"
+        "귀사의 무궁한 번영을 기원하며, 긍정적인 검토 부탁드리겠습니다.\n"
         "감사합니다."
     )
     body = intro + "\n\n" + _one_sentence_per_line(draft.intro) + "\n\n" + block + signature
