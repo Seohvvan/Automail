@@ -171,12 +171,12 @@ st.markdown("""
   .app-header::before {
       content: "";
       flex: none;
-      width: 14px;
-      height: 14px;
+      width: 22px;
+      height: 22px;
 
-      background: linear-gradient(135deg, #5273D8, var(--am-primary));
-      border-radius: 5px;
-      box-shadow: 0 2px 6px rgba(52, 83, 178, .35);
+      /* 딥블루 메일(봉투) 아이콘 */
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%233453B2"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>')
+          no-repeat center / contain;
   }
 
   /* 섹션 헤더 (#### 발송 승인 대기 / 결과 요약 / 업체명) */
