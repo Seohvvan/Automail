@@ -200,15 +200,17 @@ def build_supervisor_graph(creds, llm, on_event=print):
         for i in state.get("_targets", []):
             c = companies[i]
             c["search_attempts"] = c.get("search_attempts", 0) + 1
+            on_event(f"[검색] {c['name']} — 담당자 이메일 탐색을 시작합니다.")
             try:
                 c.update(run_search_agent(c["name"], llm, c.get("hint", ""),
                                           instruction=instruction, on_event=on_event))
-                on_event(f"[검색] {c['name']} → {c.get('email') or '미발견'} "
+                on_event(f"[결과] {c['name']} → {c.get('email') or '미발견'} "
                          f"({c.get('tier')})")
             except Exception as e:  # noqa: BLE001 - 한 업체 오류로 배치 중단 방지
                 c["verified"] = False
                 c["verify_reason"] = f"검색 오류: {e}"
-                on_event(f"[검색] {c['name']} 오류: {e}")
+                on_event(f"[결과] {c['name']} 오류: {e}")
+            on_event("=" * 75)   # 업체별 검색 로그 구분선
         return Command(goto="supervisor", update={"companies": companies})
 
     def write_node(state: WorkflowState):

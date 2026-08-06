@@ -111,6 +111,23 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+  /* ---------- 디자인 토큰 ---------- */
+
+  :root {
+      --am-primary: #3453B2;        /* 절제된 딥블루 포인트 */
+      --am-primary-hover: #2B4696;
+      --am-primary-tint: #EEF2FC;
+      --am-ink: #1C2431;            /* 제목/강조 텍스트 */
+      --am-ink-2: #3E4A5E;          /* 본문 보조 텍스트 */
+      --am-ink-3: #8A94A6;          /* 메타/플레이스홀더 */
+      --am-border: #E7ECF3;
+      --am-surface: #FFFFFF;
+      --am-bg-soft: #F4F7FB;
+      --am-shadow-card:
+          0 1px 2px rgba(15, 23, 42, .04),
+          0 8px 24px -14px rgba(15, 23, 42, .10);
+  }
+
   /* ---------- 공통 ---------- */
 
   html,
@@ -125,20 +142,51 @@ st.markdown("""
   }
 
   .block-container {
-      padding-top: 2.8rem !important;
+      max-width: 1280px;
+      padding-top: 2.4rem !important;
+      padding-bottom: 4rem;
   }
 
   .app-header {
-      margin: 8px 0 12px;
-      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      margin: 8px 0 8px;
+      padding: 16px 22px;
       overflow: hidden;
 
-      background: #2b2d42;
-      color: #ffffff;
+      background: var(--am-surface);
+      color: var(--am-ink);
 
-      border-radius: 9px !important;
-      font-size: 18px;
+      border: 1px solid var(--am-border);
+      border-radius: 14px !important;
+      box-shadow: var(--am-shadow-card);
+
+      font-size: 20px;
       font-weight: 700;
+      letter-spacing: -0.01em;
+  }
+
+  .app-header::before {
+      content: "";
+      flex: none;
+      width: 14px;
+      height: 14px;
+
+      background: linear-gradient(135deg, #5273D8, var(--am-primary));
+      border-radius: 5px;
+      box-shadow: 0 2px 6px rgba(52, 83, 178, .35);
+  }
+
+  /* 섹션 헤더 (#### 발송 승인 대기 / 결과 요약 / 업체명) */
+  div[data-testid="stMarkdownContainer"] h4 {
+      padding: 0.25rem 0 0.35rem !important;
+
+      color: var(--am-ink);
+      font-size: 1.06rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
   }
 
   [class*="st-key-test_toggle"] {
@@ -152,29 +200,225 @@ st.markdown("""
   }
 
   .reply-box {
-      padding: 12px 14px;
+      padding: 14px 16px;
 
-      background: #f7f8fa;
-      border: 1px solid #e7e9ed;
-      border-radius: 8px;
+      background: var(--am-bg-soft);
+      border: 1px solid var(--am-border);
+      border-radius: 10px;
 
       font-size: 14px;
-      line-height: 1.55;
+      line-height: 1.6;
       white-space: pre-wrap;
   }
 
+  /* 받은 답장 박스 다음 블록('후속 메일 제목' 라벨)에 8px 추가 여백 */
+  div[data-testid="stElementContainer"]:has(.reply-box)
+      + div[data-testid="stElementContainer"] {
+      margin-top: 8px;
+  }
+
   .meta {
-      color: #6b727d;
+      color: var(--am-ink-3);
       font-size: 12.5px;
-      line-height: 1.5;
+      line-height: 1.6;
   }
 
   .meta b {
-      color: #3a3f49;
+      color: var(--am-ink-2);
+      font-weight: 600;
   }
 
 
-  /* ---------- 진행 로그 ---------- */
+  /* ---------- 카드 (st.container(border=True, key="card_*")) ---------- */
+
+  [class*="st-key-card_"],
+  [class*="st-key-company_list"] {
+      background: var(--am-surface);
+      border: 1px solid var(--am-border) !important;
+      border-radius: 14px !important;
+      box-shadow: var(--am-shadow-card);
+  }
+
+  [class*="st-key-card_"] {
+      padding: 1.15rem 1.25rem !important;
+  }
+
+  /* 승인 대기 카드: 업체명 크게 + 뱃지를 업체명 바로 옆(12px)에 배치 */
+  [class*="st-key-card_ap_"] div[data-testid="stHorizontalBlock"] {
+      align-items: center;
+      gap: 12px;
+      flex-wrap: nowrap;
+  }
+
+  [class*="st-key-card_ap_"]
+      div[data-testid="stHorizontalBlock"]
+      > div[data-testid="stColumn"] {
+      flex: 0 0 auto !important;
+      width: auto !important;
+      min-width: 0;
+  }
+
+  [class*="st-key-card_ap_"] div[data-testid="stCheckbox"] p {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.3;
+  }
+
+  /* 커진 업체명에 맞춰 체크박스 크기·세로 정렬 조정 */
+  [class*="st-key-card_ap_"] div[data-testid="stCheckbox"] {
+      margin-top: 0 !important;   /* 기본 8px 상단 마진 제거 → 행 세로 중심 일치 */
+  }
+
+  [class*="st-key-card_ap_"] div[data-testid="stCheckbox"] label {
+      align-items: center;
+      gap: 0;
+  }
+
+  /* 체크박스 시각 요소: label > (숨김 span) + div — 업체명과 8px 간격 */
+  [class*="st-key-card_ap_"]
+      div[data-testid="stCheckbox"] label > span + div {
+      width: 19px;
+      height: 19px;
+      margin-top: 0;
+      margin-right: 8px;
+      flex: none;
+  }
+
+  [class*="st-key-card_ap_"]
+      div[data-testid="stCheckbox"] label > div:last-child {
+      padding-left: 0;
+  }
+
+  /* 뱃지(플래그)를 업체명·체크박스와 같은 세로 중심에 */
+  [class*="st-key-card_ap_"]
+      div[data-testid="stHorizontalBlock"]
+      div[data-testid="stMarkdownContainer"] {
+      margin-bottom: 0 !important;   /* p 마진 제거에 따른 -16px 보정 마진 해제 */
+  }
+
+  [class*="st-key-card_ap_"]
+      div[data-testid="stHorizontalBlock"]
+      div[data-testid="stMarkdownContainer"] > p {
+      display: flex;
+      align-items: center;
+      margin: 0;
+  }
+
+  /* 업체명 행과 '수신 ~' 메타 사이 간격 절반 (기본 gap 1rem → 0.5rem) */
+  [class*="st-key-card_ap_"]
+      div[data-testid="stElementContainer"]:has(.meta) {
+      margin-top: -0.5rem;
+  }
+
+  /* '선택한 업체 발송 승인'과 '발송 건너뛰기' 버튼 사이 12px */
+  div[data-testid="stHorizontalBlock"]:has([class*="st-key-ap_go_"]) {
+      gap: 12px;
+      flex-wrap: nowrap;
+  }
+
+  div[data-testid="stHorizontalBlock"]:has([class*="st-key-ap_go_"])
+      > div[data-testid="stColumn"] {
+      flex: 0 0 auto !important;
+      width: auto !important;
+      min-width: 0;
+  }
+
+  /* 파일 업로더의 자체 X(삭제) 버튼 숨김 — 제거는 '첨부 제거' 버튼으로 통일 */
+  [data-testid="stFileUploaderDeleteBtn"],
+  [data-testid="stFileChipDeleteBtn"] {
+      display: none !important;
+  }
+
+  /* 설정 expander 도 같은 카드 언어로 */
+  div[data-testid="stExpander"] details {
+      background: var(--am-surface);
+      border: 1px solid var(--am-border) !important;
+      border-radius: 14px;
+      box-shadow: var(--am-shadow-card);
+  }
+
+  div[data-testid="stExpander"] summary {
+      font-weight: 600;
+  }
+
+  div[data-testid="stExpander"] summary:hover {
+      color: var(--am-primary);
+  }
+
+
+  /* ---------- 버튼 ---------- */
+
+  div[data-testid="stButton"] > button,
+  a[data-testid="stBaseLinkButton-primary"] {
+      font-weight: 600;
+      transition:
+          background .15s ease,
+          border-color .15s ease,
+          color .15s ease,
+          box-shadow .15s ease;
+  }
+
+  button[data-testid="stBaseButton-primary"],
+  a[data-testid="stBaseLinkButton-primary"] {
+      box-shadow: 0 1px 2px rgba(52, 83, 178, .25);
+  }
+
+  button[data-testid="stBaseButton-primary"]:hover:enabled,
+  a[data-testid="stBaseLinkButton-primary"]:hover {
+      background: var(--am-primary-hover) !important;
+      border-color: var(--am-primary-hover) !important;
+      box-shadow: 0 2px 6px rgba(43, 70, 150, .30);
+  }
+
+  /* secondary = 고스트 스타일 */
+  button[data-testid="stBaseButton-secondary"] {
+      background: transparent;
+      color: var(--am-ink-2);
+      border: 1px solid #D7DEE9;
+  }
+
+  button[data-testid="stBaseButton-secondary"]:hover:enabled {
+      background: var(--am-primary-tint);
+      color: var(--am-primary);
+      border-color: var(--am-primary);
+  }
+
+
+  /* ---------- 탭 (밑줄형) ---------- */
+
+  div[data-testid="stTabs"] [role="tablist"] {
+      gap: 28px;
+      border-bottom: 1px solid var(--am-border);
+  }
+
+  div[data-testid="stTabs"] [role="tab"] {
+      color: var(--am-ink-3);
+      font-size: 15px !important;
+      font-weight: 600 !important;
+  }
+
+  div[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+      color: var(--am-ink);
+  }
+
+  div[data-testid="stTabs"] [role="tab"] * {
+      color: inherit !important;
+      font-size: inherit !important;
+      font-weight: inherit !important;
+  }
+
+
+  /* ---------- 안내(info) 알림: 노란 경고 대신 딥블루 톤 ---------- */
+
+  div[data-testid="stAlertContainer"]:has([data-testid="stAlertContentInfo"]) {
+      background: var(--am-primary-tint);
+      color: #2B4696;
+      border: 1px solid #D6E0F5;
+      border-radius: 10px;
+  }
+
+
+  /* ---------- 진행 로그 (옅은 배경 모노스페이스 박스) ---------- */
 
   div[data-testid="stCode"] pre,
   .stCode pre {
@@ -182,18 +426,25 @@ st.markdown("""
       padding: 14px 16px !important;
       overflow-y: auto;
 
-      background: #1f2133 !important;
-      color: #d7dbe8 !important;
+      background: var(--am-bg-soft) !important;
+      color: var(--am-ink-2) !important;
 
-      border-radius: 9px;
+      border: 1px solid var(--am-border);
+      border-radius: 10px;
       font-size: 12.5px;
-      line-height: 1.55;
+      line-height: 1.6;
   }
 
   div[data-testid="stCode"] code,
   .stCode code {
       background: transparent !important;
-      color: #d7dbe8 !important;
+      color: inherit !important;
+      font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
   }
 
 
@@ -235,7 +486,7 @@ st.markdown("""
       height: 45px;
       padding: 0 10px 0 15px;
 
-      border-bottom: 1px solid #f0f1f3;
+      border-bottom: 1px solid #F0F3F8;
   }
 
   [class*="st-key-co_row"]:last-child {
@@ -262,10 +513,15 @@ st.markdown("""
       text-align: left;
   }
 
+  /* hover 는 버튼(내부 직사각형)이 아니라 행 전체에 칠한다 */
+  [class*="st-key-co_row"]:hover {
+      background: var(--am-bg-soft);
+  }
+
   [class*="st-key-co_row"]
       div[data-testid="stButton"] > button:hover {
-      background: #f7f8fa !important;
-      color: #1a1a1a !important;
+      background: transparent !important;
+      color: var(--am-ink) !important;
   }
 
   [class*="st-key-co_row"]
@@ -283,13 +539,25 @@ st.markdown("""
   [class*="st-key-co_rowsel"] {
       padding-left: 12px;
 
-      background: #eef1ff;
-      border-left: 3px solid #4361ee;
+      background: var(--am-primary-tint);
+      border-left: 3px solid var(--am-primary);
+  }
+
+  [class*="st-key-co_rowsel"]
+      div[data-testid="stButton"] > button {
+      color: var(--am-primary) !important;
+      font-weight: 600;
+  }
+
+  /* 선택된 행은 hover 시에도 파란 틴트/글자색 유지 */
+  [class*="st-key-co_rowsel"]:hover {
+      background: var(--am-primary-tint);
   }
 
   [class*="st-key-co_rowsel"]
       div[data-testid="stButton"] > button:hover {
       background: transparent !important;
+      color: var(--am-primary) !important;
   }
 
 
@@ -322,16 +590,6 @@ st.markdown("""
 
   .flag-cell {
       height: 45px;
-  }
-            
-  div[data-testid="stTabs"] [role="tab"] {
-      font-size: 18px !important;
-      font-weight: 600 !important;
-  }
-
-  div[data-testid="stTabs"] [role="tab"] * {
-      font-size: inherit !important;
-      font-weight: inherit !important;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -675,10 +933,10 @@ def start_auto(limit, test_email_addr, mode):
 STATUS_LABEL = {"accepted": "수락", "rejected": "거절", "question": "대기",
                 "no_reply": "무응답", "loading": "분류중…"}
 BADGE_CSS = {
-    "ok": ("#e3f6e8", "#1c7c3a"), "no": ("#fde4e4", "#c0322b"),
-    "accepted": ("#e3f6e8", "#1c7c3a"), "rejected": ("#fde4e4", "#c0322b"),
-    "question": ("#fff2d8", "#9a6b00"), "no_reply": ("#eceef1", "#7a808a"),
-    "loading": ("#eef1ff", "#4a5bd0"),
+    "ok": ("#E5F3EB", "#1E7A45"), "no": ("#FBEAE9", "#B3261E"),
+    "accepted": ("#E5F3EB", "#1E7A45"), "rejected": ("#FBEAE9", "#B3261E"),
+    "question": ("#FBF0DA", "#8F6A0A"), "no_reply": ("#EDF0F5", "#66707F"),
+    "loading": ("#EEF2FC", "#3453B2"),
 }
 
 
@@ -688,9 +946,9 @@ def esc(s):
 
 def badge(kind, text):
     bg, fg = BADGE_CSS.get(kind, ("#eceef1", "#7a808a"))
-    return (f'<span style="font-size:11px;padding:2px 9px;border-radius:10px;'
-            f'font-weight:600;white-space:nowrap;background:{bg};color:{fg}">'
-            f'{esc(text)}</span>')
+    return (f'<span style="font-size:11px;padding:3px 10px;border-radius:999px;'
+            f'font-weight:600;letter-spacing:.01em;white-space:nowrap;'
+            f'background:{bg};color:{fg}">{esc(text)}</span>')
 
 
 def status_badge(s):
@@ -802,21 +1060,26 @@ with st.expander("설정 / 첨부", expanded=False):
                  index=campus_opts.index(cfg.get("campus", "자연과학캠퍼스"))
                  if cfg.get("campus") in campus_opts else 0,
                  key="c_campus", horizontal=True)
-    up = st.file_uploader("제안서 PDF 첨부", type=["pdf"], key="c_pdf")
+    # 업로더 자체 X 버튼은 CSS로 숨기고, 제거는 '첨부 제거' 버튼 하나로 통일한다.
+    # 제거 시 key(nonce)를 바꿔 업로더 위젯을 초기화한다.
+    if "pdf_uploader_nonce" not in st.session_state:
+        st.session_state["pdf_uploader_nonce"] = 0
+    up = st.file_uploader("제안서 PDF 첨부", type=["pdf"],
+                          key=f"c_pdf_{st.session_state['pdf_uploader_nonce']}")
     if up is not None:
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         path = os.path.join(UPLOAD_DIR, os.path.basename(up.name))
         with open(path, "wb") as f:
             f.write(up.getbuffer())
         cfg["attachment_path"] = os.path.abspath(path)
-        st.caption(f"첨부: {up.name}")
-    elif cfg["attachment_path"]:
+    if cfg["attachment_path"]:
         cap_col, btn_col = st.columns([3, 1])
         cap_col.caption(f"첨부: {os.path.basename(cfg['attachment_path'])}")
         if btn_col.button("첨부 제거", key="c_pdf_clear"):
             # 경로만 비운다(파일은 다른 스냅샷이 참조할 수 있어 삭제하지 않음).
             # '설정 저장'을 눌러야 빈 첨부 상태가 스냅샷에 반영된다.
             cfg["attachment_path"] = ""
+            st.session_state["pdf_uploader_nonce"] += 1
             st.rerun()
     else:
         st.caption("첨부 없음")
@@ -877,15 +1140,16 @@ with tab_auto:
         head = ("시트에 기재된 이메일을 그대로 사용해 초안 작성부터 진행합니다. "
                 if mode == "skip"
                 else "시트의 기존 이메일·초안을 무시하고 처음부터 재검색·재작성합니다. ")
-        st.warning(head + note + " 계속할까요?")
-        c_ok, c_no, _sp = st.columns([1, 1, 4])
-        if c_ok.button("계속", type="primary", key="confirm_go"):
+        st.info(head + note + " 계속할까요?")
+        c_ok, c_no, _sp = st.columns([1.4, 1.4, 3.2])
+        if c_ok.button("계속", type="primary", key="confirm_go",
+                       use_container_width=True):
             st.session_state["auto_confirm"] = None
             limit_raw = (st.session_state.get("auto_limit") or "").strip()
             limit = int(limit_raw) if limit_raw.isdigit() else 0
             start_auto(limit, t, mode)
             st.rerun()
-        if c_no.button("취소", key="confirm_cancel"):
+        if c_no.button("취소", key="confirm_cancel", use_container_width=True):
             st.session_state["auto_confirm"] = None
             st.rerun()
 
@@ -901,7 +1165,8 @@ with tab_auto:
         drafts = p.get("drafts") or []
         for d in drafts:
             i = d["i"]
-            with st.container(border=True):
+            # key 는 카드 스타일(CSS `st-key-card_*`) 적용 용도로만 사용
+            with st.container(border=True, key=f"card_ap_{seq}_{i}"):
                 cchk, cbdg = st.columns([4, 2])
                 cchk.checkbox(d.get("name", ""), value=True, key=f"ap_{seq}_{i}")
                 cbdg.markdown(email_badge(d.get("tier"), d.get("email")),
@@ -936,8 +1201,9 @@ with tab_auto:
         if not results:
             return
         st.markdown("#### 결과 요약")
-        for c in results:
-            with st.container(border=True):
+        for ri, c in enumerate(results):
+            # key 는 카드 스타일(CSS `st-key-card_*`) 적용 용도로만 사용
+            with st.container(border=True, key=f"card_res_{ri}"):
                 if c.get("sent"):
                     sent = badge("ok", "발송됨")
                 elif c.get("skipped"):
