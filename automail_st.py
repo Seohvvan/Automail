@@ -64,15 +64,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CFG_KEYS = ["spreadsheet_id", "name_range", "hint_range", "email_range",
             "sponsor_items", "event_name", "event_date", "writer_name",
             "writer_phone", "campus", "attachment_path"]
-# 기본 설정값 (UI에서 비워두면 이 값이 사용됨). 본인 스프레드시트에 맞게 수정하세요.
-DEFAULTS = {
-    "spreadsheet_id": "d/ 뒤에 있는 Spreadsheet ID를 입력하세요",
-    "name_range": "시트이름!시작cell:끝cell (예: 실험용!C5:C13)",
-    "hint_range": "시트이름!시작cell:끝cell (예: 실험용!C5:C13)",
-    "email_range": "시트이름!시작cell:끝cell (예: 실험용!F5:F13)",
-    "sponsor_items": "제안 내용: 협찬 가능한 제품 500개, 홍보 효과: 부스 배너 노출, 공식 SNS 홍보 1회",
-    "event_name": "2026 대동제",
-}
+# 기본 설정값 (CFG_KEYS 중 원하는 키만 넣으면 입력칸이 그 값으로 미리 채워진다).
+# 입력 형식 안내는 값이 아니라 각 위젯의 placeholder 로 보여준다 — 여기에 안내
+# 문구를 넣으면 "실제 값"이 되어 그대로 저장·조회되므로 비워 둔다.
+DEFAULTS = {}
 CONFIG_DIR = os.path.join(BASE_DIR, "config")   # 설정 스냅샷 저장 폴더
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 
@@ -1080,19 +1075,23 @@ with st.expander("설정 / 첨부", expanded=False):
     with g1:
         st.text_input("Spreadsheet ID", value=cfg["spreadsheet_id"],
                       key="c_spreadsheet_id",
-                      placeholder="예: 1AbCdEf... (URL의 /d/ 뒤 문자열)")
+                      placeholder="시트 URL의 /d/ 뒤 문자열")
         st.text_input("이메일 범위", value=cfg["email_range"],
-                      key="c_email_range", placeholder="예: 실험용!F5:F13")
+                      key="c_email_range",
+                      placeholder="시트이름!시작셀:끝셀 (예: F5:F14)")
     with g2:
         st.text_input("업체명 범위", value=cfg["name_range"],
-                      key="c_name_range", placeholder="예: 실험용!B5:B13")
+                      key="c_name_range",
+                      placeholder="시트이름!시작셀:끝셀 (예: B5:B14)")
     with g3:
         st.text_input("힌트 범위", value=cfg["hint_range"],
-                      key="c_hint_range", placeholder="예: 실험용!C5:C13")
+                      key="c_hint_range",
+                      placeholder="시트이름!시작셀:끝셀 (예: C5:C14)")
     st.text_area("제안 내용", value=cfg["sponsor_items"], key="c_sponsor_items",
                  height=68,
-                 placeholder="예: 제안 내용: 협찬 가능한 제품 500개, 홍보 효과: 부스 배너 노출·공식 SNS 홍보")
-    e1, e2, e3, e4, e5 = st.columns([1.4, 1.1, 1.1, 1.2, 2.2])
+                 placeholder="제안 내용: 협찬 가능한 제품 500개, "
+                             "홍보 효과: 부스 배너 노출, 공식 SNS 홍보 1회")
+    e1, e2, e3, e4, e5 = st.columns([1.4, 1.1, 1.1, 1.4, 2.0])
     with e1:
         st.text_input("행사명", value=cfg["event_name"], key="c_event_name",
                       placeholder="예: 2026 대동제")
@@ -1109,7 +1108,7 @@ with st.expander("설정 / 첨부", expanded=False):
                       placeholder="예: 김서환")
     with e4:
         st.text_input("연락처(Mobile)", value=cfg["writer_phone"],
-                      key="c_writer_phone", placeholder="예: 010-1234-5678")
+                      key="c_writer_phone", placeholder="010-1234-5678")
     with e5:
         campus_opts = ["자연과학캠퍼스", "인문사회과학캠퍼스"]
         st.radio("캠퍼스", campus_opts,
