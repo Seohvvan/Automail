@@ -228,6 +228,31 @@ st.markdown("""
       font-weight: 600;
   }
 
+  /* 실행 버튼 아래 안내: 항목별 줄바꿈 + 라벨 강조 */
+  .meta.guide {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      margin: 4px 0 8px;
+      padding: 12px 14px;
+
+      background: var(--am-bg-soft);
+      border: 1px solid var(--am-border);
+      border-radius: 10px;
+  }
+
+  .meta.guide b {
+      color: var(--am-ink);
+      margin-right: 4px;
+  }
+
+  .meta.guide .guide-note {
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px solid var(--am-border);
+  }
+
 
   /* ---------- 카드 (st.container(border=True, key="card_*")) ---------- */
 
@@ -720,6 +745,39 @@ def _shift_column(rng, n):
     return f"{sheet}{shift(c1)}{r1}:{shift(c2)}{r2}"
 
 
+def row_bounds(rng):
+    """A1 범위의 (시작행, 끝행). 파싱 실패 시 (0, 0).
+
+    read_column 이 범위의 행 수만큼 패딩해 주므로, 읽어온 리스트의 i 번째는
+    항상 시트의 '시작행 + i' 행에 대응한다(행 번호 ↔ 인덱스 환산의 기준).
+    """
+    m = re.search(r"[A-Za-z]+(\d+):[A-Za-z]+(\d+)\s*$", rng or "")
+    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+
+def parse_row_range(text, first, last):
+    """'5-9' / '7' / 빈칸 을 처리할 (시작행, 끝행) 으로 해석.
+
+    빈칸이면 업체명 범위 전체. 형식이 잘못됐거나 범위를 완전히 벗어나면
+    ValueError 를 던져 호출부에서 실행을 막는다(오타로 전체 발송되는 사고 방지).
+    """
+    if not first:
+        raise ValueError("업체명 범위를 '시트1!B5:B14' 형식으로 먼저 설정하세요.")
+    s = (text or "").strip().replace("~", "-")
+    if not s:
+        return first, last
+    m = re.fullmatch(r"(\d+)\s*(?:-\s*(\d+))?", s)
+    if not m:
+        raise ValueError("행 범위는 '5-9' 또는 '7' 형식으로 입력하세요. (빈칸이면 전체)")
+    a = int(m.group(1))
+    b = int(m.group(2)) if m.group(2) else a
+    if a > b:
+        a, b = b, a
+    if b < first or a > last:
+        raise ValueError(f"{a}-{b} 행은 업체명 범위({first}-{last} 행) 밖입니다.")
+    return max(a, first), min(b, last)
+
+
 def subject_range(wcfg):
     """제목 열 = 이메일 열의 오른쪽 한 칸."""
     return _shift_column(wcfg["email_range"], 1)
@@ -813,25 +871,23 @@ def _persist_auto_rows(auto, c, wcfg, companies):
                  [r.get("body", "") for r in rows])
 
 
-def _auto_worker(auto, c, model, sender, wcfg, rows, limit, test_email_addr,
+def _auto_worker(auto, c, model, sender, wcfg, rows, row_range, test_email_addr,
                  mode="fresh"):
     """백그라운드에서 supervisor 그래프를 실행. interrupt(발송 승인) 시 사람을 기다린다.
 
-    세션 상태(auto)/자격증명(c)/설정(wcfg)은 메인 스레드에서 준비해 넘긴다
-    (백그라운드 스레드에서 st.session_state 를 건드리지 않기 위함).
+    row_range 는 처리할 시트 행 번호 (시작, 끝). 세션 상태(auto)/자격증명(c)/
+    설정(wcfg)은 메인 스레드에서 준비해 넘긴다(백그라운드 스레드에서
+    st.session_state 를 건드리지 않기 위함).
     """
     try:
-        targets, considered = [], 0
-        for i, r in enumerate(rows):
-            if not r["name"]:
-                continue
-            if limit and considered >= limit:
-                break
-            considered += 1
-            targets.append(i)
+        first_row = row_bounds(wcfg["name_range"])[0]
+        lo, hi = row_range
+        targets = [i for i, r in enumerate(rows)
+                   if r["name"] and lo <= first_row + i <= hi]
         if not targets:
-            auto["error"] = "처리할 업체가 없습니다."
+            auto["error"] = f"{lo}~{hi} 행에 처리할 업체가 없습니다."
             return
+        _auto_log(auto, f"[대상] 업체명 열 {lo}~{hi} 행에서 {len(targets)}개 업체를 처리합니다.")
         auto["rows"], auto["indices"] = rows, targets
         if mode == "skip":
             # 검색 건너뛰기: 시트의 업체명+이메일을 그대로 쓰고 '작성'부터 진행.
@@ -905,7 +961,7 @@ def _auto_worker(auto, c, model, sender, wcfg, rows, limit, test_email_addr,
         auto["running"] = False
 
 
-def start_auto(limit, test_email_addr, mode):
+def start_auto(row_range, test_email_addr, mode):
     """워커 스레드 기동. 인증/LLM/시트 읽기는 메인 스레드에서 준비."""
     if AUTO["running"]:
         st.error("이미 실행 중입니다.")
@@ -923,7 +979,7 @@ def start_auto(limit, test_email_addr, mode):
         return
     threading.Thread(target=_auto_worker,
                      args=(AUTO, c, model, sender, dict(cfg), rows,
-                           limit, test_email_addr, mode),
+                           row_range, test_email_addr, mode),
                      daemon=True).start()
     st.session_state["auto_polling"] = True
 
@@ -1109,7 +1165,8 @@ tab_auto, tab_reply = st.tabs(["자동 실행 (에이전트)", "후속 대응"])
 with tab_auto:
     b1, b2, b3 = st.columns([1.6, 1.4, 1.6])
     with b1:
-        st.text_input("처리 개수 (빈칸=전체)", value="3", key="auto_limit")
+        st.text_input("처리 행 범위 (빈칸=전체)", key="auto_rows",
+                      placeholder="예: 5-9")
     with b2:
         st.write("")
         st.write("")
@@ -1121,10 +1178,16 @@ with tab_auto:
         skip_clicked = st.button("재검색 건너뛰기", disabled=AUTO["running"],
                                  use_container_width=True)
     st.markdown(
-        '<div class="meta"><b>자동 실행 시작</b>: 시트의 기존 이메일·초안을 무시하고 '
-        '검색 → 초안 작성 → (사람 승인) → 발송 → 답장 확인을 처음부터 진행합니다. '
-        '<b>재검색 건너뛰기</b>: 시트에 기재된 업체명·이메일을 그대로 사용해 초안 작성부터 '
-        '진행합니다. 두 경우 모두 발송 전에는 반드시 아래에서 승인해야 합니다.</div>',
+        '<div class="meta guide">'
+        '<div><b>자동 실행 시작</b> 시트의 기존 이메일·초안을 무시하고 '
+        '검색 → 초안 작성 → (사람 승인) → 발송 → 답장 확인을 처음부터 진행합니다.</div>'
+        '<div><b>재검색 건너뛰기</b> 시트에 기재된 업체명·이메일을 그대로 사용해 '
+        '초안 작성부터 진행합니다.</div>'
+        '<div><b>처리 행 범위</b> 업체명 열의 시트 행 번호로 지정합니다 '
+        '(<b>5-9</b> → 5~9행, <b>7</b> → 7행만, 빈칸 → 전체).</div>'
+        '<div class="guide-note">두 실행 모두 발송 전에는 반드시 아래에서 '
+        '승인해야 합니다.</div>'
+        '</div>',
         unsafe_allow_html=True)
 
     # 시작 전 확인 (Flask 의 confirm() 대체)
@@ -1140,14 +1203,22 @@ with tab_auto:
         head = ("시트에 기재된 이메일을 그대로 사용해 초안 작성부터 진행합니다. "
                 if mode == "skip"
                 else "시트의 기존 이메일·초안을 무시하고 처음부터 재검색·재작성합니다. ")
-        st.info(head + note + " 계속할까요?")
+        # 행 범위는 확인 단계에서 검증한다(잘못된 입력으로 전체 발송되는 것 방지).
+        try:
+            row_range = parse_row_range(st.session_state.get("auto_rows"),
+                                        *row_bounds(cfg["name_range"]))
+        except ValueError as e:
+            row_range = None
+            st.error(str(e))
+        if row_range:
+            scope = (f"{row_range[0]} 행" if row_range[0] == row_range[1]
+                     else f"{row_range[0]}~{row_range[1]} 행")
+            st.info(f"{head}대상: 업체명 열의 {scope}. {note} 계속할까요?")
         c_ok, c_no, _sp = st.columns([1.4, 1.4, 3.2])
         if c_ok.button("계속", type="primary", key="confirm_go",
-                       use_container_width=True):
+                       use_container_width=True, disabled=row_range is None):
             st.session_state["auto_confirm"] = None
-            limit_raw = (st.session_state.get("auto_limit") or "").strip()
-            limit = int(limit_raw) if limit_raw.isdigit() else 0
-            start_auto(limit, t, mode)
+            start_auto(row_range, t, mode)
             st.rerun()
         if c_no.button("취소", key="confirm_cancel", use_container_width=True):
             st.session_state["auto_confirm"] = None
