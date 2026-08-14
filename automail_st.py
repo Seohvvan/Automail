@@ -1146,9 +1146,10 @@ with st.expander("설정 / 첨부", expanded=False):
             if v:
                 cfg[k] = v
         cfg["campus"] = st.session_state.get("c_campus", "자연과학캠퍼스")
-        _ed = st.session_state.get("c_event_date")  # date 객체 → "YYYY-MM-DD" 문자열
-        if _ed:
-            cfg["event_date"] = _ed.isoformat()
+        # date 객체 → "YYYY-MM-DD" 문자열. 비우면 지운다 — 날짜가 여러 개라
+        # '제안 내용'에 "행사 일자: ..."로 직접 적는 경우를 위해.
+        _ed = st.session_state.get("c_event_date")
+        cfg["event_date"] = _ed.isoformat() if _ed else ""
         os.makedirs(CONFIG_DIR, exist_ok=True)
         snap = os.path.join(CONFIG_DIR, time.strftime("%Y%m%d_%H%M%S") + ".json")
         with open(snap, "w", encoding="utf-8") as f:

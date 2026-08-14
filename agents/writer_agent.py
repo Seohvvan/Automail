@@ -29,6 +29,12 @@ def _one_sentence_per_line(text: str) -> str:
     return "\n".join(p.strip() for p in parts if p.strip())
 
 
+# 제안 항목 라벨 — 이 앞에서 줄을 끊어 항목별로 한 줄씩 만든다.
+# 문자열 맨 앞의 라벨은 이미 줄 시작이므로 제외(^ 가 아닌 위치만 매칭).
+_ITEM_LABEL_RE = re.compile(
+    r"(?<!^)\s*(?<![^\s,;·])((?:행사\s*일자|제안\s*내용|홍보\s*효과)\s*:)")
+
+
 def _format_kdate(iso: str) -> str:
     """'2026-06-10' → '2026년 6월 10일(수)'. 앞자리 0 제거, 한글 요일."""
     if not iso:
@@ -63,8 +69,9 @@ def run_writer_agent(company: dict, sponsor_items: str, sender_name: str, llm,
         "제공된 정보에 없는 날짜·인원 등 구체 수치는 지어내지 마세요.\n"
         "- 이 제안이 업체에 주는 의미(학우들에게 남을 좋은 인상, 브랜드 이미지 제고·제품 홍보)를 "
         "한두 문장으로 밝히고 도입부를 끝내세요.\n"
-        "- '제안 사항은', '제안 내용:', '홍보 효과:', '더 자세한', '감사합니다' 같은 항목·맺음말은 "
-        "쓰지 마세요 (시스템이 붙입니다). 과장된 미사여구와 이모지는 금지.\n"
+        "- '제안 사항은', '행사 일자:', '제안 내용:', '홍보 효과:', '더 자세한', '감사합니다' "
+        "같은 항목·맺음말은 쓰지 마세요 (시스템이 붙입니다). "
+        "과장된 미사여구와 이모지는 금지.\n"
         "지정된 형식으로만 출력하세요."
     )
     draft = llm.with_structured_output(BodyDraft).invoke(prompt)
@@ -74,10 +81,17 @@ def run_writer_agent(company: dict, sponsor_items: str, sender_name: str, llm,
         signature += f"\nMobile: {phone}"
     items = (sponsor_items or "").strip()
     items = re.sub(r"\s+:", ":", items)  # 콜론 앞 공백 제거 → 앞 텍스트에 붙임
-    m = re.search(r"홍보\s*효과\s*:", items)
-    if m:
-        items = items[:m.start()].rstrip().rstrip(",").rstrip() + "\n" + items[m.start():].strip()
-    lines = ([f"행사 일자: {_format_kdate(event_date)}"] if event_date else []) + items.split("\n")
+    # 항목 라벨 앞에서 줄을 끊는다 — 한 줄로 이어 써도 항목별로 분리되도록.
+    # (줄바꿈으로 이미 나뉘어 있으면 그대로 유지된다)
+    items = _ITEM_LABEL_RE.sub(
+        lambda mt: "\n" + mt.group(1).strip(), items).strip()
+    items = "\n".join(ln.strip().rstrip(",").rstrip()
+                      for ln in items.split("\n") if ln.strip())
+    # 제안 내용에 '행사 일자:'를 직접 적었으면(날짜가 여러 개인 경우) 달력 값은 넣지
+    # 않는다 — 같은 라벨이 두 줄로 중복되는 것을 막는다.
+    has_own_date = any(re.match(r"행사\s*일자\s*:", ln) for ln in items.split("\n"))
+    head = [f"행사 일자: {_format_kdate(event_date)}"] if (event_date and not has_own_date) else []
+    lines = head + items.split("\n")
     # 제안 사항 전체(행사 일자·제안 내용·홍보 효과)를 굵게: 각 줄을 ** ** 로 감쌈
     bold_block = "\n".join(f"**{ln.replace('**', '').strip()}**"
                            for ln in lines if ln.strip())
