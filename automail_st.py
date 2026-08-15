@@ -776,46 +776,40 @@ def parse_row_range(text, first, last):
 
 
 # 이메일 열 기준 오른쪽으로 이어지는 출력 열 배치:
-#   이메일 → 발견 여부(O/X) → 메일 제목 → 메일 본문 → 발송 여부(O/X)
-FOUND_YES, FOUND_NO = "O", "X"
-
-
-def flag_range(wcfg):
-    """발견 여부 열 = 이메일 열의 오른쪽 한 칸."""
-    return _shift_column(wcfg["email_range"], 1)
+#   이메일 → 메일 제목 → 메일 본문 → 발송 여부(O/X)
+# (이메일 발견 여부는 이메일 칸이 비었는지로 바로 알 수 있어 따로 두지 않는다)
+SENT_YES, SENT_NO = "O", "X"
 
 
 def subject_range(wcfg):
-    """제목 열 = 이메일 열의 오른쪽 두 칸."""
-    return _shift_column(wcfg["email_range"], 2)
+    """제목 열 = 이메일 열의 오른쪽 한 칸."""
+    return _shift_column(wcfg["email_range"], 1)
 
 
 def body_range(wcfg):
-    """본문 열 = 이메일 열의 오른쪽 세 칸."""
-    return _shift_column(wcfg["email_range"], 3)
+    """본문 열 = 이메일 열의 오른쪽 두 칸."""
+    return _shift_column(wcfg["email_range"], 2)
 
 
 def sent_range(wcfg):
-    """발송 여부 열 = 이메일 열의 오른쪽 네 칸.
+    """발송 여부 열 = 이메일 열의 오른쪽 세 칸.
 
     후속 대응 탭이 이 열로 조회 대상을 좁힌다(발송한 곳만 Gmail 을 뒤지도록).
     """
-    return _shift_column(wcfg["email_range"], 4)
+    return _shift_column(wcfg["email_range"], 3)
 
 
 def read_aligned(c, wcfg):
-    """업체명/힌트/이메일/발견여부/제목/본문/발송여부를 행 정렬해 반환."""
+    """업체명/힌트/이메일/제목/본문/발송여부를 행 정렬해 dict 리스트로 반환."""
     ranges = [wcfg["name_range"], wcfg["hint_range"], wcfg["email_range"],
-              flag_range(wcfg), subject_range(wcfg), body_range(wcfg),
-              sent_range(wcfg)]
+              subject_range(wcfg), body_range(wcfg), sent_range(wcfg)]
     cols = [read_column(c, wcfg["spreadsheet_id"], rng) for rng in ranges]
     n = max((len(x) for x in cols), default=0)
     cols = [(x + [""] * n)[:n] for x in cols]
     rows = []
-    for name, hint, email, found, subject, body, sent_flag in zip(*cols):
+    for name, hint, email, subject, body, sent_flag in zip(*cols):
         rows.append({"name": name, "hint": hint, "email": email,
-                     "found": found, "subject": subject, "body": body,
-                     "sent_flag": sent_flag})
+                     "subject": subject, "body": body, "sent_flag": sent_flag})
     return rows
 
 
@@ -852,7 +846,7 @@ def load_companies(c, wcfg):
                                                 bodies, sents):
         if not (email and subject and body):
             continue
-        if has_sent_col and sent.strip().upper() != FOUND_YES:
+        if has_sent_col and sent.strip().upper() != SENT_YES:
             continue
         companies.append({"name": name, "email": email,
                           "subject": subject, "body": body})
@@ -881,11 +875,11 @@ def _auto_log(auto, msg):
 
 
 def _persist_auto_rows(auto, c, wcfg, companies):
-    """supervisor 결과를 전체 행에 반영하고 시트(이메일/발견여부/제목/본문)에 저장.
+    """supervisor 결과를 전체 행에 반영하고 시트(이메일/제목/본문/발송여부)에 저장.
 
     이메일 열은 메모리가 비어 있으면 시트의 기존 값을 보존한다
     (승인 대기 중 수동 입력·재검색 실패로 값이 지워지는 것 방지).
-    발견 여부(O/X)는 이번에 처리한 행만 갱신하고, 나머지는 시트 값을 유지한다
+    발송 여부(O/X)는 이번에 처리한 행만 갱신하고, 나머지는 시트 값을 유지한다
     (행 범위를 좁혀 실행했을 때 시도조차 안 한 행에 X 가 찍히지 않도록).
     """
     rows = auto["rows"]
@@ -898,13 +892,9 @@ def _persist_auto_rows(auto, c, wcfg, companies):
         sheet_emails = []
     emails = merge_email_column(mem_emails, sheet_emails)
     targets = set(auto["indices"])
-    flags = [(FOUND_YES if (emails[i] if i < len(emails) else "").strip()
-              else FOUND_NO) if i in targets else r.get("found", "")
-             for i, r in enumerate(rows)]
-    sent_flags = [(FOUND_YES if r.get("sent") else FOUND_NO) if i in targets
+    sent_flags = [(SENT_YES if r.get("sent") else SENT_NO) if i in targets
                   else r.get("sent_flag", "") for i, r in enumerate(rows)]
     write_column(c, wcfg["spreadsheet_id"], wcfg["email_range"], emails)
-    write_column(c, wcfg["spreadsheet_id"], flag_range(wcfg), flags)
     write_column(c, wcfg["spreadsheet_id"], subject_range(wcfg),
                  [r.get("subject", "") for r in rows])
     write_column(c, wcfg["spreadsheet_id"], body_range(wcfg),
