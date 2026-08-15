@@ -235,11 +235,34 @@ def _fetch_site_text(domain):
     return "\n".join(texts)
 
 
+class SearchQuotaError(RuntimeError):
+    """Tavily 크레딧 소진/한도 초과. 재시도해도 소용없으니 배치를 멈춘다."""
+
+
+# basic 1크레딧 / advanced 2크레딧. 실측상 결과 차이가 없어 basic 을 기본으로 둔다.
+TAVILY_DEPTH = os.getenv("TAVILY_SEARCH_DEPTH", "basic")
+_QUOTA_HINTS = ("432", "usage limit", "exceeds your plan", "quota",
+                "credit", "401", "invalid api key")
+
+
 def _tavily(query, domains=None):
+    """Tavily 검색. 크레딧 소진은 SearchQuotaError 로 올려 조용히 묻히지 않게 한다.
+
+    langchain_tavily 는 실패를 예외가 아니라 {"error": ...} 딕셔너리로 돌려준다.
+    이걸 걸러내지 않으면 '검색 결과 0건'과 구분되지 않아, 크레딧이 떨어진 뒤에도
+    앱이 정상 동작하는 것처럼 보이면서 전 업체가 '미발견'으로 기록된다.
+    """
     tool_ = TavilySearch(max_results=8, include_answer=True,
-                         search_depth="advanced", include_raw_content=True,
+                         search_depth=TAVILY_DEPTH, include_raw_content=True,
                          include_domains=domains)
-    return tool_.invoke({"query": query})
+    raw = tool_.invoke({"query": query})
+    err = raw.get("error") if isinstance(raw, dict) else None
+    if err:
+        msg = str(err)
+        if any(h in msg.lower() for h in _QUOTA_HINTS):
+            raise SearchQuotaError(f"Tavily 크레딧/한도 문제: {msg}")
+        raise RuntimeError(f"Tavily 오류: {msg}")
+    return raw
 
 
 def _results_list(raw):
@@ -318,7 +341,9 @@ def make_search_tools(store):
         domains = [normalize_domain(include_domain)] if include_domain.strip() else None
         try:
             raw = _tavily(query, domains)
-        except Exception as e:  # noqa: BLE001 - 도구 실패는 관찰로 반환
+        except SearchQuotaError:
+            raise            # 배치를 멈춰야 하므로 관찰로 삼키지 않고 올린다
+        except Exception as e:  # noqa: BLE001 - 그 밖의 실패는 관찰로 반환
             return f"검색 실패: {e}"
         lines = []
         answer = raw.get("answer") if isinstance(raw, dict) else None

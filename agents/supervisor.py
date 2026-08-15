@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from agents.google_clients import send_email
 from agents.search_agent import run_search_agent
 from agents.state import WorkflowState
+from agents.tools import SearchQuotaError
 from agents.usage import call_llm
 from agents.writer_agent import run_writer_agent
 
@@ -208,6 +209,13 @@ def build_supervisor_graph(creds, llm, on_event=print):
                                           instruction=instruction, on_event=on_event))
                 on_event(f"[결과] {c['name']} → {c.get('email') or '미발견'} "
                          f"({c.get('tier')})")
+            except SearchQuotaError as e:
+                # 검색이 통째로 불가 — 남은 업체를 '미발견'으로 오기록하지 않도록 중단
+                c["search_attempts"] = c.get("search_attempts", 1) - 1
+                on_event(f"[중단] {e}")
+                on_event("[중단] 검색을 계속할 수 없어 남은 업체를 건너뜁니다. "
+                         "Tavily 크레딧을 충전한 뒤 남은 행 범위로 다시 실행하세요.")
+                return Command(goto=END, update={"companies": companies})
             except Exception as e:  # noqa: BLE001 - 한 업체 오류로 배치 중단 방지
                 c["verified"] = False
                 c["verify_reason"] = f"검색 오류: {e}"
