@@ -41,7 +41,8 @@ def _secret(*keys):
         return None
 
 
-for _k in ("GEMINI_API_KEY", "GEMINI_MODEL", "TAVILY_API_KEY"):
+for _k in ("GEMINI_API_KEY", "GEMINI_MODEL", "TAVILY_API_KEY",
+           "GEMINI_RPM", "GEMINI_PRICE_IN", "GEMINI_PRICE_OUT"):
     _v = _secret(_k)
     if _v and not os.getenv(_k):
         os.environ[_k] = str(_v)
@@ -55,6 +56,7 @@ from agents.graph import build_reply_graph  # noqa: E402
 from agents.reply_agent import classify_reply  # noqa: E402
 from agents.sheet_sync import merge_email_column  # noqa: E402
 from agents.supervisor import build_supervisor_graph  # noqa: E402
+from agents.usage import USAGE, format_usage  # noqa: E402
 from google.auth.transport.requests import Request  # noqa: E402
 from google_auth_oauthlib.flow import Flow  # noqa: E402
 from langgraph.types import Command  # noqa: E402
@@ -773,27 +775,37 @@ def parse_row_range(text, first, last):
     return max(a, first), min(b, last)
 
 
-def subject_range(wcfg):
-    """제목 열 = 이메일 열의 오른쪽 한 칸."""
+# 이메일 열 기준 오른쪽으로 이어지는 출력 열 배치:
+#   이메일 → 발견 여부(O/X) → 메일 제목 → 메일 본문
+FOUND_YES, FOUND_NO = "O", "X"
+
+
+def flag_range(wcfg):
+    """발견 여부 열 = 이메일 열의 오른쪽 한 칸."""
     return _shift_column(wcfg["email_range"], 1)
 
 
-def body_range(wcfg):
-    """본문 열 = 이메일 열의 오른쪽 두 칸."""
+def subject_range(wcfg):
+    """제목 열 = 이메일 열의 오른쪽 두 칸."""
     return _shift_column(wcfg["email_range"], 2)
 
 
+def body_range(wcfg):
+    """본문 열 = 이메일 열의 오른쪽 세 칸."""
+    return _shift_column(wcfg["email_range"], 3)
+
+
 def read_aligned(c, wcfg):
-    """업체명/힌트/이메일/제목/본문을 행 정렬해 dict 리스트로 반환."""
+    """업체명/힌트/이메일/발견여부/제목/본문을 행 정렬해 dict 리스트로 반환."""
     ranges = [wcfg["name_range"], wcfg["hint_range"], wcfg["email_range"],
-              subject_range(wcfg), body_range(wcfg)]
+              flag_range(wcfg), subject_range(wcfg), body_range(wcfg)]
     cols = [read_column(c, wcfg["spreadsheet_id"], rng) for rng in ranges]
     n = max((len(x) for x in cols), default=0)
     cols = [(x + [""] * n)[:n] for x in cols]
     rows = []
-    for name, hint, email, subject, body in zip(*cols):
+    for name, hint, email, found, subject, body in zip(*cols):
         rows.append({"name": name, "hint": hint, "email": email,
-                     "subject": subject, "body": body})
+                     "found": found, "subject": subject, "body": body})
     return rows
 
 
@@ -845,10 +857,12 @@ def _auto_log(auto, msg):
 
 
 def _persist_auto_rows(auto, c, wcfg, companies):
-    """supervisor 결과를 전체 행에 반영하고 시트(이메일/제목/본문 열)에 저장.
+    """supervisor 결과를 전체 행에 반영하고 시트(이메일/발견여부/제목/본문)에 저장.
 
     이메일 열은 메모리가 비어 있으면 시트의 기존 값을 보존한다
     (승인 대기 중 수동 입력·재검색 실패로 값이 지워지는 것 방지).
+    발견 여부(O/X)는 이번에 처리한 행만 갱신하고, 나머지는 시트 값을 유지한다
+    (행 범위를 좁혀 실행했을 때 시도조차 안 한 행에 X 가 찍히지 않도록).
     """
     rows = auto["rows"]
     for local, comp in zip(auto["indices"], companies):
@@ -858,8 +872,13 @@ def _persist_auto_rows(auto, c, wcfg, companies):
         sheet_emails = read_column(c, wcfg["spreadsheet_id"], wcfg["email_range"])
     except Exception:  # noqa: BLE001 - 읽기 실패 시 메모리 값만 사용
         sheet_emails = []
-    write_column(c, wcfg["spreadsheet_id"], wcfg["email_range"],
-                 merge_email_column(mem_emails, sheet_emails))
+    emails = merge_email_column(mem_emails, sheet_emails)
+    targets = set(auto["indices"])
+    flags = [(FOUND_YES if (emails[i] if i < len(emails) else "").strip()
+              else FOUND_NO) if i in targets else r.get("found", "")
+             for i, r in enumerate(rows)]
+    write_column(c, wcfg["spreadsheet_id"], wcfg["email_range"], emails)
+    write_column(c, wcfg["spreadsheet_id"], flag_range(wcfg), flags)
     write_column(c, wcfg["spreadsheet_id"], subject_range(wcfg),
                  [r.get("subject", "") for r in rows])
     write_column(c, wcfg["spreadsheet_id"], body_range(wcfg),
@@ -874,6 +893,7 @@ def _auto_worker(auto, c, model, sender, wcfg, rows, row_range, test_email_addr,
     설정(wcfg)은 메인 스레드에서 준비해 넘긴다(백그라운드 스레드에서
     st.session_state 를 건드리지 않기 위함).
     """
+    usage_snap = USAGE.snapshot()   # 이 실행 구간만 집계하기 위한 기준점
     try:
         first_row = row_bounds(wcfg["name_range"])[0]
         lo, hi = row_range
@@ -954,6 +974,13 @@ def _auto_worker(auto, c, model, sender, wcfg, rows, row_range, test_email_addr,
         _auto_log(auto, f"[오류] {e}")
     finally:
         auto["running"] = False
+        # 이번 실행 구간의 실제 토큰 사용량 (시범 실행 후 전체 비용 환산용)
+        try:
+            d = USAGE.delta(usage_snap)
+            auto["usage"] = d
+            _auto_log(auto, "[사용량] " + format_usage(d, len(auto["indices"])))
+        except Exception:  # noqa: BLE001 - 집계 실패로 실행 결과를 잃지 않도록
+            pass
 
 
 def start_auto(row_range, test_email_addr, mode):
