@@ -8,6 +8,8 @@ LLM 이 도구를 스스로 골라 호출하는 에이전트 루프. LLM 이 도
 """
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
+from agents.usage import call_llm
+
 
 def _short(v, n=80):
     s = str(v)
@@ -22,7 +24,7 @@ def run_react(llm, tools, system_prompt, user_prompt, max_steps=6, on_event=None
                 HumanMessage(content=user_prompt)]
     trace = []
     for _ in range(max_steps):
-        ai = llm_tools.invoke(messages)
+        ai = call_llm(llm_tools, messages, on_event)
         messages.append(ai)
         calls = getattr(ai, "tool_calls", None) or []
         if not calls:
@@ -45,7 +47,7 @@ def run_react(llm, tools, system_prompt, user_prompt, max_steps=6, on_event=None
     return messages, trace
 
 
-def finalize(llm, schema, messages, instruction):
+def finalize(llm, schema, messages, instruction, on_event=None):
     """에이전트 대화 기록에 최종 지시를 붙여 구조화 출력을 뽑는다."""
-    return llm.with_structured_output(schema).invoke(
-        messages + [HumanMessage(content=instruction)])
+    return call_llm(llm.with_structured_output(schema),
+                    messages + [HumanMessage(content=instruction)], on_event)

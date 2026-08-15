@@ -11,6 +11,8 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
+from agents.usage import call_llm
+
 
 class BodyDraft(BaseModel):
     intro: str = Field(description="이메일 도입부: 업체 인사 → 협업 제안 → 행사 소개 → 이 제안이 "
@@ -74,7 +76,7 @@ def run_writer_agent(company: dict, sponsor_items: str, sender_name: str, llm,
         "과장된 미사여구와 이모지는 금지.\n"
         "지정된 형식으로만 출력하세요."
     )
-    draft = llm.with_structured_output(BodyDraft).invoke(prompt)
+    draft = call_llm(llm.with_structured_output(BodyDraft), prompt)
     intro = f"성균관대학교 {campus} 총학생회 프로모션 담당자 {who}입니다."
     signature = f"\n\n---\n성균관대학교 제58대 총학생회 S'PEAK\n대외협력국 {who}"
     if phone:

@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from agents.google_clients import send_email
 from agents.search_agent import run_search_agent
 from agents.state import WorkflowState
+from agents.usage import call_llm
 from agents.writer_agent import run_writer_agent
 
 MAX_STEPS = 12            # supervisor 판단 턴 상한
@@ -173,7 +174,8 @@ def build_supervisor_graph(creds, llm, on_event=print):
             + "\n\n다음 행동을 지정된 형식으로만 출력하세요."
         )
         try:
-            d = llm.with_structured_output(SupervisorDecision).invoke(prompt)
+            d = call_llm(llm.with_structured_output(SupervisorDecision),
+                         prompt, on_event)
             instruction, reason = d.instruction, d.reason
         except Exception as e:  # noqa: BLE001 - LLM 실패 시 결정적 폴백
             d, instruction, reason = None, "", f"LLM 오류 폴백: {e}"
