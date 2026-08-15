@@ -776,7 +776,7 @@ def parse_row_range(text, first, last):
 
 
 # 이메일 열 기준 오른쪽으로 이어지는 출력 열 배치:
-#   이메일 → 발견 여부(O/X) → 메일 제목 → 메일 본문
+#   이메일 → 발견 여부(O/X) → 메일 제목 → 메일 본문 → 발송 여부(O/X)
 FOUND_YES, FOUND_NO = "O", "X"
 
 
@@ -795,17 +795,27 @@ def body_range(wcfg):
     return _shift_column(wcfg["email_range"], 3)
 
 
+def sent_range(wcfg):
+    """발송 여부 열 = 이메일 열의 오른쪽 네 칸.
+
+    후속 대응 탭이 이 열로 조회 대상을 좁힌다(발송한 곳만 Gmail 을 뒤지도록).
+    """
+    return _shift_column(wcfg["email_range"], 4)
+
+
 def read_aligned(c, wcfg):
-    """업체명/힌트/이메일/발견여부/제목/본문을 행 정렬해 dict 리스트로 반환."""
+    """업체명/힌트/이메일/발견여부/제목/본문/발송여부를 행 정렬해 반환."""
     ranges = [wcfg["name_range"], wcfg["hint_range"], wcfg["email_range"],
-              flag_range(wcfg), subject_range(wcfg), body_range(wcfg)]
+              flag_range(wcfg), subject_range(wcfg), body_range(wcfg),
+              sent_range(wcfg)]
     cols = [read_column(c, wcfg["spreadsheet_id"], rng) for rng in ranges]
     n = max((len(x) for x in cols), default=0)
     cols = [(x + [""] * n)[:n] for x in cols]
     rows = []
-    for name, hint, email, found, subject, body in zip(*cols):
+    for name, hint, email, found, subject, body, sent_flag in zip(*cols):
         rows.append({"name": name, "hint": hint, "email": email,
-                     "found": found, "subject": subject, "body": body})
+                     "found": found, "subject": subject, "body": body,
+                     "sent_flag": sent_flag})
     return rows
 
 
@@ -823,15 +833,29 @@ def _label(wcfg):
 
 
 def load_companies(c, wcfg):
+    """후속 대응 대상 목록. 발송 여부 열이 O 인 업체만 반환한다.
+
+    답장 조회는 업체당 Gmail API 를 한 번씩 쓰므로, 보내지도 않은 곳까지
+    뒤지지 않도록 좁힌다. 다만 발송 여부 열이 통째로 비어 있으면(이 열이
+    생기기 전에 만든 시트) 필터를 걸지 않고 기존처럼 동작한다.
+    """
     names = read_column(c, wcfg["spreadsheet_id"], wcfg["name_range"])
     emails = read_column(c, wcfg["spreadsheet_id"], wcfg["email_range"])
     subjects = read_column(c, wcfg["spreadsheet_id"], subject_range(wcfg))
     bodies = read_column(c, wcfg["spreadsheet_id"], body_range(wcfg))
+    sents = read_column(c, wcfg["spreadsheet_id"], sent_range(wcfg))
+    n = max(len(names), len(emails), len(subjects), len(bodies), len(sents))
+    sents = (sents + [""] * n)[:n]
+    has_sent_col = any(s.strip() for s in sents)
     companies = []
-    for name, email, subject, body in zip(names, emails, subjects, bodies):
-        if email and subject and body:
-            companies.append({"name": name, "email": email,
-                              "subject": subject, "body": body})
+    for name, email, subject, body, sent in zip(names, emails, subjects,
+                                                bodies, sents):
+        if not (email and subject and body):
+            continue
+        if has_sent_col and sent.strip().upper() != FOUND_YES:
+            continue
+        companies.append({"name": name, "email": email,
+                          "subject": subject, "body": body})
     return companies
 
 
@@ -877,12 +901,15 @@ def _persist_auto_rows(auto, c, wcfg, companies):
     flags = [(FOUND_YES if (emails[i] if i < len(emails) else "").strip()
               else FOUND_NO) if i in targets else r.get("found", "")
              for i, r in enumerate(rows)]
+    sent_flags = [(FOUND_YES if r.get("sent") else FOUND_NO) if i in targets
+                  else r.get("sent_flag", "") for i, r in enumerate(rows)]
     write_column(c, wcfg["spreadsheet_id"], wcfg["email_range"], emails)
     write_column(c, wcfg["spreadsheet_id"], flag_range(wcfg), flags)
     write_column(c, wcfg["spreadsheet_id"], subject_range(wcfg),
                  [r.get("subject", "") for r in rows])
     write_column(c, wcfg["spreadsheet_id"], body_range(wcfg),
                  [r.get("body", "") for r in rows])
+    write_column(c, wcfg["spreadsheet_id"], sent_range(wcfg), sent_flags)
 
 
 def _auto_worker(auto, c, model, sender, wcfg, rows, row_range, test_email_addr,
@@ -1386,7 +1413,8 @@ with tab_reply:
     with side:
         clicked_idx = None
         if not companies:
-            st.info("발송 대상이 없습니다. 먼저 초안 작성을 실행하세요.")
+            st.info("후속 대응 대상이 없습니다. 자동 실행에서 발송을 마치면 "
+                    "발송 여부 열이 O 인 업체만 여기에 표시됩니다.")
         else:
             lcol, bcol = st.columns([3.4, 1], gap="small")
 
