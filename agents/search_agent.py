@@ -24,8 +24,15 @@ MAX_STEPS = 6   # 에이전트 도구 호출 반복 상한 (비용/지연 통제
 
 class SearchDecision(BaseModel):
     """에이전트 탐색 종료 후 최종 판단 (구조화 출력)."""
-    email: str = Field(description="도구 결과에 '실제로 등장한' 협찬/제휴/마케팅 문의 "
-                                   "이메일 하나. 없으면 빈 문자열. 절대 추측 금지.")
+    email: str = Field(description="도구 결과에 '실제로 등장한' 이메일 하나. 절대 추측·"
+                                   "변형 금지(원문 그대로). 협찬/제휴 '전용' 창구가 "
+                                   "아니어도 된다 — 그 업체에 닿을 수 있는 주소면 "
+                                   "대표·고객문의·마케팅·info/contact 등 무엇이든 "
+                                   "제시하라. 출처가 공식 홈페이지가 아니어도(기사·"
+                                   "디렉토리 등) 제시하라. 등급(HIGH/REVIEW)은 시스템이 "
+                                   "따로 판정하므로 신뢰도를 이유로 비우지 마라. "
+                                   "빈 문자열은 '도구 결과에 이메일이 하나도 없었을 때'"
+                                   "에만 쓴다.")
     official_domain: str = Field(description="업체 공식 홈페이지 도메인 (예: 'example.com'). "
                                              "포털/SNS/블로그 등 플랫폼 도메인 금지. "
                                              "확인 못 했으면 빈 문자열.")
@@ -119,7 +126,14 @@ def run_search_agent(company_name, llm, hint="", instruction="", on_event=None):
     decision = finalize(
         llm, SearchDecision, messages,
         "조사를 종료합니다. 지금까지의 도구 결과에 근거해 최종 판단을 지정된 형식으로만 "
-        "출력하세요. 도구 결과에 실제로 등장한 이메일만 email 에 적을 수 있습니다.")
+        "출력하세요.\n"
+        "- email 에는 도구 결과에 실제로 등장한 주소만, 원문 그대로 적습니다.\n"
+        "- 후보가 하나라도 있으면 그중 가장 적합한 것을 반드시 고르세요. "
+        "'협찬 전용 창구가 아니다', '공식 홈페이지에서 확인되지 않았다'는 이유로 "
+        "비우지 마세요 — 그런 경우를 위해 REVIEW 등급이 있고, 사람이 확인합니다. "
+        "미발견(빈 문자열)은 후보가 정말 하나도 없을 때만입니다.\n"
+        "- 확신이 낮으면 confidence 를 낮게 주되 email 은 채우세요.",
+        on_event)
     email, tier, verified, reason = _grade(store, decision)
     return {"email": email, "tier": tier, "verified": verified,
             "verify_reason": reason, "info": decision.company_summary,
