@@ -102,7 +102,9 @@ def _valid_targets(action, targets, companies):
             if (not c.get("verified")) and c.get("search_attempts", 0) < MAX_SEARCH_ATTEMPTS:
                 ok.append(i)
         elif action == "write":
-            if c.get("email") and not c.get("sent"):
+            # 이미 초안이 있으면 다시 쓰지 않는다(_fallback 과 조건을 맞춰,
+            # 손으로 고친 본문이 supervisor 판단에 따라 덮어써지는 것을 막는다).
+            if c.get("email") and not c.get("subject") and not c.get("sent"):
                 ok.append(i)
         elif action == "approve_send":
             if c.get("subject") and c.get("email") and not c.get("sent") \

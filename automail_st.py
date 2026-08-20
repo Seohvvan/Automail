@@ -921,7 +921,23 @@ def _auto_worker(auto, c, model, sender, wcfg, rows, row_range, test_email_addr,
             return
         _auto_log(auto, f"[대상] 업체명 열 {lo}~{hi} 행에서 {len(targets)}개 업체를 처리합니다.")
         auto["rows"], auto["indices"] = rows, targets
-        if mode == "skip":
+        if mode == "asis":
+            # 그대로 발송: 검색·작성을 모두 차단하고 시트의 제목·본문을 그대로 쓴다.
+            # (손으로 고친 초안을 보존하기 위한 모드)
+            _auto_log(auto, "[그대로 발송] 시트의 제목·본문을 그대로 사용합니다 "
+                            "(검색·작성 건너뜀).")
+            missing = []
+            for i in targets:
+                for k in ("sent", "message_id", "reply_status", "follow_up"):
+                    rows[i].pop(k, None)
+                rows[i]["search_attempts"] = 99   # 검색 차단 (재시도 상한 초과)
+                if not (rows[i].get("email") and rows[i].get("subject")
+                        and rows[i].get("body")):
+                    missing.append(rows[i]["name"])
+            if missing:
+                _auto_log(auto, "[그대로 발송] 이메일·제목·본문이 갖춰지지 않아 제외되는 "
+                                "업체: " + ", ".join(missing))
+        elif mode == "skip":
             # 검색 건너뛰기: 시트의 업체명+이메일을 그대로 쓰고 '작성'부터 진행.
             # 검색 시도 횟수를 상한으로 채워 supervisor 가 검색을 고를 수 없게 한다.
             _auto_log(auto, "[검색 건너뛰기] 시트의 이메일을 그대로 사용해 초안 작성부터 진행합니다.")
@@ -1207,7 +1223,7 @@ tab_auto, tab_reply = st.tabs(["자동 실행 (에이전트)", "후속 대응"])
 # ---------- 탭 1: 자동 실행 ----------
 
 with tab_auto:
-    b1, b2, b3 = st.columns([1.6, 1.4, 1.6])
+    b1, b2, b3, b4 = st.columns([1.5, 1.3, 1.4, 1.6])
     with b1:
         st.text_input("처리 행 범위 (빈칸=전체)", key="auto_rows",
                       placeholder="예: 5-9")
@@ -1221,12 +1237,19 @@ with tab_auto:
         st.write("")
         skip_clicked = st.button("재검색 건너뛰기", disabled=AUTO["running"],
                                  use_container_width=True)
+    with b4:
+        st.write("")
+        st.write("")
+        asis_clicked = st.button("시트 초안 그대로 발송", disabled=AUTO["running"],
+                                 use_container_width=True)
     st.markdown(
         '<div class="meta guide">'
         '<div><b>자동 실행 시작</b> 시트의 기존 이메일·초안을 무시하고 '
         '검색 → 초안 작성 → (사람 승인) → 발송 → 답장 확인을 처음부터 진행합니다.</div>'
         '<div><b>재검색 건너뛰기</b> 시트에 기재된 업체명·이메일을 그대로 사용해 '
-        '초안 작성부터 진행합니다.</div>'
+        '초안 작성부터 진행합니다 (초안은 새로 작성됩니다).</div>'
+        '<div><b>시트 초안 그대로 발송</b> 검색·작성을 모두 건너뛰고 시트에 저장된 '
+        '제목·본문을 그대로 승인 화면에 올립니다 (손으로 고친 초안 보존).</div>'
         '<div><b>처리 행 범위</b> 업체명 열의 시트 행 번호로 지정합니다 '
         '(<b>5-9</b> → 5~9행, <b>7</b> → 7행만, 빈칸 → 전체).</div>'
         '<div class="guide-note">두 실행 모두 발송 전에는 반드시 아래에서 '
@@ -1239,14 +1262,17 @@ with tab_auto:
         st.session_state["auto_confirm"] = "fresh"
     if skip_clicked:
         st.session_state["auto_confirm"] = "skip"
+    if asis_clicked:
+        st.session_state["auto_confirm"] = "asis"
     if st.session_state.get("auto_confirm") and not AUTO["running"]:
         mode = st.session_state["auto_confirm"]
         t = test_email()
         note = (f"테스트 주소({t})로 발송됩니다." if t
                 else "테스트 모드 꺼짐 — 실제 업체에 발송될 수 있습니다!")
-        head = ("시트에 기재된 이메일을 그대로 사용해 초안 작성부터 진행합니다. "
-                if mode == "skip"
-                else "시트의 기존 이메일·초안을 무시하고 처음부터 재검색·재작성합니다. ")
+        head = {
+            "skip": "시트에 기재된 이메일을 그대로 사용해 초안을 새로 작성합니다. ",
+            "asis": "검색·작성 없이 시트의 제목·본문을 그대로 발송합니다. ",
+        }.get(mode, "시트의 기존 이메일·초안을 무시하고 처음부터 재검색·재작성합니다. ")
         # 행 범위는 확인 단계에서 검증한다(잘못된 입력으로 전체 발송되는 것 방지).
         try:
             row_range = parse_row_range(st.session_state.get("auto_rows"),
